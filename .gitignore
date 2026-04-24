@@ -1,0 +1,5 @@
+/backend/server_log.txt
+/backend/__pycache__
+/backend/component/__pycache__
+/backend/db/__pycache__
+/venv
