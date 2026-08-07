@@ -27,8 +27,14 @@
         <nav class="navbar navbar-expand-lg app-navbar">
             <div class="container-fluid d-flex justify-content-between align-items-center">
                 <a class="navbar-brand fw-bold text-success" href="#">NutriAI ✨</a>
-                <button class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold shadow-sm"
-                    id="logoutBtnHeader">Logout</button>
+                <div class="d-flex align-items-center gap-2">
+                    <button class="btn btn-outline-success btn-sm rounded-pill px-3 fw-semibold shadow-sm"
+                        id="headerTourBtn">
+                        💡 App Tour
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm rounded-pill px-3 fw-bold shadow-sm"
+                        id="logoutBtnHeader">Logout</button>
+                </div>
             </div>
         </nav>
 
@@ -237,6 +243,87 @@
         </div>
 
         <!-- jQuery & Bootstrap JS -->
+        <!-- KNOWLEDGE TOUR MODAL (FRESH SIGNUP ONBOARDING) -->
+        <div class="tour-modal-backdrop" id="knowledgeTourModal">
+            <div class="tour-modal-card">
+                <div class="tour-header-banner">
+                    <div class="tour-step-icon-bg" id="tourIconContainer">
+                        <span>🥗</span>
+                    </div>
+                    <h5 class="fw-bold mb-0 text-white" id="tourBannerHeading">Welcome to NutriAI!</h5>
+                </div>
+
+                <div class="tour-body">
+                    <!-- Step 1 -->
+                    <div class="tour-step active" data-step="1" data-icon="🥗" data-heading="Welcome to NutriAI!"
+                        data-target=".summary-card">
+                        <h4 class="tour-step-title">Daily Calorie & Macro Target</h4>
+                        <p class="tour-step-desc">
+                            Track your eaten, remaining, and goal calories right here! Watch your daily protein, carbs,
+                            and fat breakdown update automatically.
+                        </p>
+                    </div>
+
+                    <!-- Step 2 -->
+                    <div class="tour-step" data-step="2" data-icon="📸" data-heading="Philippine Food Scanner"
+                        data-target="[data-nav='scanner'], #scanFoodNavBtn">
+                        <h4 class="tour-step-title">Instant Local Food Recognition</h4>
+                        <p class="tour-step-desc">
+                            Tap the Scanner button in the bottom navigation bar to take or upload a photo of Filipino
+                            dishes (Adobo, Sinigang, etc.) for instant macro analysis!
+                        </p>
+                    </div>
+
+                    <!-- Step 3 -->
+                    <div class="tour-step" data-step="3" data-icon="⚠️" data-heading="Medical & Allergy Alerts"
+                        data-target="#dailyStatusBadge, #remindBreakfast">
+                        <h4 class="tour-step-title">Personalized Health Warnings</h4>
+                        <p class="tour-step-desc">
+                            NutriAI automatically checks your scanned meals against your medical conditions (such as
+                            Diabetes or Hypertension) to issue instant health alerts.
+                        </p>
+                    </div>
+
+                    <!-- Step 4 -->
+                    <div class="tour-step" data-step="4" data-icon="📊" data-heading="Progress & App Settings"
+                        data-target="[data-nav='progress'], [data-nav='profile']">
+                        <h4 class="tour-step-title">Track Weight & Customize Profile</h4>
+                        <p class="tour-step-desc">
+                            Use the Progress and Profile tabs at the bottom to view weight charts, update health goals,
+                            or replay this tour anytime!
+                        </p>
+                    </div>
+                </div>
+
+                <div class="tour-footer">
+                    <div class="tour-dots-container" id="tourDotsContainer">
+                        <div class="tour-dot active" data-dot="1"></div>
+                        <div class="tour-dot" data-dot="2"></div>
+                        <div class="tour-dot" data-dot="3"></div>
+                        <div class="tour-dot" data-dot="4"></div>
+                    </div>
+
+                    <div class="tour-actions-row">
+                        <button type="button" class="btn btn-link text-muted p-0 text-decoration-none fw-medium small"
+                            id="tourSkipBtn">
+                            Skip Tour
+                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="button"
+                                class="btn btn-outline-secondary rounded-pill px-3 py-2 fw-semibold d-none"
+                                id="tourPrevBtn">
+                                Back
+                            </button>
+                            <button type="button" class="btn btn-success rounded-pill px-4 py-2 fw-bold shadow-sm"
+                                id="tourNextBtn">
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
         <script src="../scripts/app.js"></script>

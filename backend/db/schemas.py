@@ -31,6 +31,7 @@ class UserResponse(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     middle_initial: Optional[str] = None
+    has_completed_tour: bool = False
     created_at: datetime
     
     class Config:
@@ -131,3 +132,8 @@ class PushSubscriptionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# VERIFICATION SCHEMAS
+class VerifyEmailRequest(BaseModel):
+    email: EmailStr
+    code: str

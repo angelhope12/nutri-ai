@@ -229,3 +229,38 @@ def save_cached_analysis(db: Session, image_hash: str, analysis: dict, food_text
     db.commit()
     db.refresh(db_cache)
     return db_cache
+
+# --- PENDING VERIFICATION CRUD ---
+def create_pending_verification(
+    db: Session, 
+    user: schemas.UserCreate, 
+    code: str, 
+    expires_at: datetime
+):
+    hashed_password = get_password_hash(user.password)
+    
+    # Check if a pending verification for this email already exists and delete it
+    existing = db.query(models.PendingVerification).filter(models.PendingVerification.email == user.email).first()
+    if existing:
+        db.delete(existing)
+        
+    db_pending = models.PendingVerification(
+        email=user.email,
+        hashed_password=hashed_password,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        middle_initial=user.middle_initial,
+        verification_code=code,
+        expires_at=expires_at
+    )
+    db.add(db_pending)
+    db.commit()
+    db.refresh(db_pending)
+    return db_pending
+
+def get_pending_verification(db: Session, email: str):
+    return db.query(models.PendingVerification).filter(models.PendingVerification.email == email).first()
+
+def delete_pending_verification(db: Session, email: str):
+    db.query(models.PendingVerification).filter(models.PendingVerification.email == email).delete(synchronize_session=False)
+    db.commit()

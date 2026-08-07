@@ -226,11 +226,11 @@ function setupBMICalculator() {
 
         // Update badge classes
         $badge.removeClass('bg-info text-dark bg-success text-white bg-warning text-dark bg-danger text-white')
-              .addClass(badgeClass).text(category);
+            .addClass(badgeClass).text(category);
 
         // Update progress bar class and style
         $progressBar.removeClass('bg-info bg-success bg-warning bg-danger')
-                    .addClass(progressClass).css('width', `${percent}%`).attr('aria-valuenow', percent);
+            .addClass(progressClass).css('width', `${percent}%`).attr('aria-valuenow', percent);
 
         $container.removeClass('d-none');
     }
@@ -315,6 +315,7 @@ function setToken(token) {
 
 function removeToken() {
     localStorage.removeItem('nutri_token');
+    localStorage.removeItem('nutri_tour_completed');
 }
 
 function checkAuth() {
@@ -851,6 +852,10 @@ $(document).ready(function () {
         }
     });
 
+    // --- 2-STEP REGISTRATION LOGIC ---
+    let pendingRegistrationEmail = null;
+    let pendingRegistrationPassword = null;
+
     $('#registerForm').submit(async function (e) {
         e.preventDefault();
         const first_name = $('#regFirstName').val();
@@ -865,11 +870,11 @@ $(document).ready(function () {
         }
 
         const btn = $('#regBtn');
-        btn.prop('disabled', true).text('Creating Account...');
+        btn.prop('disabled', true).text('Sending Code...');
         $('#regError').addClass('d-none');
 
         try {
-            const res = await fetch(`${API_BASE_URL}/users/`, {
+            const res = await fetch(`${API_BASE_URL}/users/request-verification`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, first_name, last_name, middle_initial })
@@ -877,13 +882,63 @@ $(document).ready(function () {
 
             if (!res.ok) {
                 const errData = await res.json();
-                throw new Error(errData.detail || "Registration failed");
+                throw new Error(errData.detail || "Request failed");
             }
 
-            // Auto login after register
+            // Save credentials temporarily for login after verification
+            pendingRegistrationEmail = email;
+            pendingRegistrationPassword = password;
+
+            // Switch to verification UI
+            $('#registrationFormWrapper').addClass('d-none');
+            $('#verificationFormWrapper').removeClass('d-none');
+            showToast("Verification code sent to your email!", 'success');
+            
+        } catch (err) {
+            showToast(err.message, 'danger');
+        } finally {
+            btn.prop('disabled', false).text('Create Account');
+        }
+    });
+
+    $('#backToRegBtn').click(function () {
+        $('#verificationFormWrapper').addClass('d-none');
+        $('#registrationFormWrapper').removeClass('d-none');
+        $('#verifyCode').val('');
+    });
+
+    $('#verifyForm').submit(async function (e) {
+        e.preventDefault();
+        const code = $('#verifyCode').val();
+        
+        if (!pendingRegistrationEmail) {
+            showToast("Session expired. Please register again.", 'danger');
+            $('#backToRegBtn').click();
+            return;
+        }
+
+        const btn = $('#verifyBtn');
+        btn.prop('disabled', true).text('Verifying...');
+        $('#verifyError').addClass('d-none');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/users/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: pendingRegistrationEmail, code: code })
+            });
+
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.detail || "Verification failed");
+            }
+
+            showToast("Email verified successfully! Logging you in...", 'success');
+
+            // Auto login after verification
             const formData = new URLSearchParams();
-            formData.append('username', email);
-            formData.append('password', password);
+            formData.append('username', pendingRegistrationEmail);
+            formData.append('password', pendingRegistrationPassword);
             const loginRes = await fetch(`${API_BASE_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -891,12 +946,13 @@ $(document).ready(function () {
             });
             const data = await loginRes.json();
             setToken(data.access_token);
+            localStorage.removeItem('nutri_tour_completed');
 
             // Redirect to Onboarding
             window.location.href = 'onboarding.html';
         } catch (err) {
             showToast(err.message, 'danger');
-            btn.prop('disabled', false).text('Create Account');
+            btn.prop('disabled', false).text('Verify & Register');
         }
     });
 
@@ -1767,4 +1823,159 @@ $(document).ready(function () {
         }
     });
 
+    // Initialize Fresh User Knowledge Onboarding Tour
+    setupKnowledgeTour();
+
 });
+
+// --- KNOWLEDGE TOUR ONBOARDING LOGIC ---
+function setupKnowledgeTour() {
+    const $modal = $('#knowledgeTourModal');
+    if ($modal.length === 0) return;
+
+    let currentStep = 1;
+    const totalSteps = 4;
+
+    function clearHighlights() {
+        $('.tour-highlight-active').removeClass('tour-highlight-active');
+        $modal.removeClass('has-spotlight');
+    }
+
+    function renderStep(stepNum) {
+        currentStep = stepNum;
+
+        // Clear previous element highlights
+        clearHighlights();
+
+        // Hide all steps, show target step
+        $('.tour-step').removeClass('active');
+        const $targetStep = $(`.tour-step[data-step="${currentStep}"]`);
+        $targetStep.addClass('active');
+
+        // Update header banner icon & heading
+        const icon = $targetStep.attr('data-icon') || '🥗';
+        const heading = $targetStep.attr('data-heading') || 'Welcome to NutriAI!';
+        $('#tourIconContainer span').text(icon);
+        $('#tourBannerHeading').text(heading);
+
+        // Highlight step target element if specified
+        const targetSelector = $targetStep.attr('data-target');
+        if (targetSelector) {
+            const $targetEl = $(targetSelector).first();
+            if ($targetEl.length > 0) {
+                $modal.addClass('has-spotlight');
+                $targetEl.addClass('tour-highlight-active');
+                try {
+                    $targetEl[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } catch (e) { }
+            } else {
+                $modal.removeClass('has-spotlight');
+            }
+        } else {
+            $modal.removeClass('has-spotlight');
+        }
+
+        // Update dots
+        $('.tour-dot').removeClass('active');
+        $(`.tour-dot[data-dot="${currentStep}"]`).addClass('active');
+
+        // Update Action Buttons
+        if (currentStep === 1) {
+            $('#tourPrevBtn').addClass('d-none');
+        } else {
+            $('#tourPrevBtn').removeClass('d-none');
+        }
+
+        if (currentStep === totalSteps) {
+            $('#tourNextBtn').text('Get Started! 🚀');
+        } else {
+            $('#tourNextBtn').text('Next');
+        }
+    }
+
+    async function finishTour() {
+        clearHighlights();
+        $modal.removeClass('show');
+        localStorage.setItem('nutri_tour_completed', 'true');
+
+        try {
+            const token = getToken();
+            if (token) {
+                await fetchWithAuth(`${API_BASE_URL}/users/complete-tour`, {
+                    method: 'POST'
+                });
+            }
+        } catch (err) {
+            console.error("Failed to update tour completion status on server:", err);
+        }
+    }
+
+    function showTourModal() {
+        renderStep(1);
+        $modal.addClass('show');
+    }
+
+    window.openKnowledgeTour = function () {
+        showTourModal();
+    };
+
+    // Event Handlers
+    $('#tourNextBtn').on('click', function () {
+        if (currentStep < totalSteps) {
+            renderStep(currentStep + 1);
+        } else {
+            finishTour();
+        }
+    });
+
+    $('#tourPrevBtn').on('click', function () {
+        if (currentStep > 1) {
+            renderStep(currentStep - 1);
+        }
+    });
+
+    $('#tourSkipBtn').on('click', function () {
+        finishTour();
+    });
+
+    $('#headerTourBtn').on('click', function () {
+        showTourModal();
+    });
+
+    $('.tour-dot').on('click', function () {
+        const dotStep = parseInt($(this).attr('data-dot'));
+        if (dotStep && dotStep >= 1 && dotStep <= totalSteps) {
+            renderStep(dotStep);
+        }
+    });
+
+    // Check if tour should pop up automatically on index.html
+    const path = window.location.pathname.split('/').pop() || 'index.html';
+    if (path === '' || path === 'index.html') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('replayTour') === 'true') {
+            showTourModal();
+            return;
+        }
+
+        const token = getToken();
+        if (token) {
+            // Check server user state
+            fetchWithAuth(`${API_BASE_URL}/users/me`)
+                .then(res => res.ok ? res.json() : null)
+                .then(user => {
+                    if (user && user.has_completed_tour === false) {
+                        showTourModal();
+                    } else if (user && user.has_completed_tour === true) {
+                        localStorage.setItem('nutri_tour_completed', 'true');
+                    }
+                })
+                .catch(err => {
+                    console.log("Could not check tour status from server", err);
+                    if (localStorage.getItem('nutri_tour_completed') !== 'true') {
+                        showTourModal();
+                    }
+                });
+        }
+    }
+}

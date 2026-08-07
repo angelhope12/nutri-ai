@@ -258,3 +258,177 @@ body {
 #bmiProgressBar {
     transition: width 0.5s ease-in-out, background-color 0.5s ease-in-out;
 }
+
+/* ==========================================================================
+   Knowledge Tour Popup Modal Styles
+   ========================================================================== */
+.tour-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 1080;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.3s ease;
+    padding: 20px;
+}
+
+/* When a spotlight target is active, make backdrop transparent so the
+   target element's massive box-shadow acts as the dim overlay instead. */
+.tour-modal-backdrop.has-spotlight {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    pointer-events: none;
+}
+
+.tour-modal-backdrop.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.tour-modal-card {
+    background: #ffffff;
+    border-radius: 24px;
+    max-width: 440px;
+    width: 100%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.4) inset;
+    overflow: hidden;
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    z-index: 1090;
+    pointer-events: auto;
+}
+
+.tour-modal-backdrop.show .tour-modal-card {
+    transform: scale(1) translateY(0);
+}
+
+.tour-header-banner {
+    background: linear-gradient(135deg, #198754 0%, #0d5c36 100%);
+    padding: 32px 24px 24px 24px;
+    color: #ffffff;
+    text-align: center;
+    position: relative;
+    border-bottom-left-radius: 50% 15px;
+    border-bottom-right-radius: 50% 15px;
+}
+
+.tour-step-icon-bg {
+    width: 72px;
+    height: 72px;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2rem;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+    margin-bottom: 12px;
+    transition: transform 0.3s ease;
+}
+
+.tour-step {
+    display: none;
+    padding: 28px 24px 16px 24px;
+    text-align: center;
+}
+
+.tour-step.active {
+    display: block;
+    animation: tourStepFadeIn 0.35s ease forwards;
+}
+
+@keyframes tourStepFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tour-step-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 10px;
+}
+
+.tour-step-desc {
+    font-size: 0.92rem;
+    color: #64748b;
+    line-height: 1.55;
+    margin-bottom: 0;
+}
+
+.tour-footer {
+    padding: 16px 24px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.tour-dots-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+}
+
+.tour-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: #cbd5e1;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.tour-dot.active {
+    width: 24px;
+    background: #198754;
+}
+
+.tour-actions-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* Dynamic Spotlight Element Highlight for Knowledge Tour */
+.tour-highlight-active {
+    position: relative !important;
+    z-index: 1085 !important;
+    box-shadow: 0 0 0 6px #198754, 0 0 30px rgba(25, 135, 84, 0.8), 0 0 0 9999px rgba(15, 23, 42, 0.65) !important;
+    border-radius: 16px !important;
+    transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: tourPulseSpotlight 2s infinite ease-in-out;
+    pointer-events: none;
+}
+
+@keyframes tourPulseSpotlight {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 6px #198754, 0 0 24px rgba(25, 135, 84, 0.7), 0 0 0 9999px rgba(15, 23, 42, 0.65);
+    }
+
+    50% {
+        box-shadow: 0 0 0 8px #20c997, 0 0 36px rgba(32, 201, 151, 0.9), 0 0 0 9999px rgba(15, 23, 42, 0.65);
+    }
+}

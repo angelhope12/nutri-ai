@@ -19,7 +19,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 # (auth, crud, models, etc.) even when invoked from the repository root.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from component import models, auth, ai_service
+from component import models, auth, ai_service, email_utils
 from db import schemas, crud
 from db.database import engine, get_db
 from urllib.parse import quote
@@ -53,6 +53,13 @@ try:
                     text("UPDATE users SET first_name=:fname, last_name=:lname WHERE id=:uid"),
                     {"fname": fname, "lname": lname, "uid": uid}
                 )
+        db_mig.commit()
+
+    # Migration for has_completed_tour column
+    res_tour = db_mig.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='has_completed_tour'"))
+    if not res_tour.fetchone():
+        print("Migrating users table: adding has_completed_tour column...")
+        db_mig.execute(text("ALTER TABLE users ADD COLUMN has_completed_tour BOOLEAN DEFAULT FALSE NOT NULL"))
         db_mig.commit()
 except Exception as e:
     print(f"Migration warning (handled): {e}")
@@ -265,8 +272,8 @@ def get_medical_conditions(db: Session = Depends(get_db)):
     return crud.get_medical_conditions(db)
 
 # --- AUTH AND USERS ---
-@app.post("/api/users/", response_model=schemas.UserResponse)
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+@app.post("/api/users/request-verification")
+def request_user_verification(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -277,7 +284,59 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
             detail="Password is too weak. It must be at least 8 characters long, contain an uppercase letter, a lowercase letter, a number, and a special character."
         )
         
-    return crud.create_user(db=db, user=user)
+    from component.models import get_ph_time
+    from datetime import timedelta
+    
+    code = email_utils.generate_verification_code()
+    expires_at = get_ph_time() + timedelta(minutes=10)
+    
+    crud.create_pending_verification(db=db, user=user, code=code, expires_at=expires_at)
+    
+    email_sent = email_utils.send_verification_email(user.email, code)
+    if not email_sent:
+        raise HTTPException(status_code=500, detail="Failed to send verification email. Please try again.")
+        
+    return {"message": "Verification code sent to email."}
+
+@app.post("/api/users/verify", response_model=schemas.UserResponse)
+def verify_and_register_user(verify_req: schemas.VerifyEmailRequest, db: Session = Depends(get_db)):
+    from component.models import get_ph_time
+    
+    pending = crud.get_pending_verification(db, email=verify_req.email)
+    if not pending:
+        raise HTTPException(status_code=400, detail="No pending registration found for this email.")
+        
+    if pending.verification_code != verify_req.code:
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+        
+    if pending.expires_at < get_ph_time():
+        crud.delete_pending_verification(db, email=verify_req.email)
+        raise HTTPException(status_code=400, detail="Verification code has expired. Please sign up again.")
+        
+    # Valid code, create user
+    user_create = schemas.UserCreate(
+        email=pending.email,
+        password="dummy", # crud.create_user hashes password, but we already have hashed_password
+        first_name=pending.first_name,
+        last_name=pending.last_name,
+        middle_initial=pending.middle_initial
+    )
+    
+    # We bypass crud.create_user because we already have the hashed password and want to save it directly.
+    # But wait, crud.create_user re-hashes. Let's do it manually here.
+    new_user = models.User(
+        email=pending.email,
+        first_name=pending.first_name,
+        last_name=pending.last_name,
+        middle_initial=pending.middle_initial,
+        hashed_password=pending.hashed_password
+    )
+    db.add(new_user)
+    crud.delete_pending_verification(db, email=verify_req.email)
+    db.commit()
+    db.refresh(new_user)
+    
+    return new_user
 
 @app.post("/api/login", response_model=schemas.Token)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -355,6 +414,14 @@ def get_google_client_id():
 @app.get("/api/users/me", response_model=schemas.UserResponse)
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
+
+@app.post("/api/users/me/complete-tour")
+@app.post("/api/users/complete-tour")
+def complete_user_tour(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    current_user.has_completed_tour = True
+    db.commit()
+    db.refresh(current_user)
+    return {"status": "success", "has_completed_tour": True}
 
 @app.put("/api/users/me/update", response_model=schemas.UserResponse)
 def update_user_info(user_update: schemas.UserUpdate, current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
