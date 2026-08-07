@@ -16,6 +16,7 @@ class User(Base):
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
     middle_initial = Column(String(10), nullable=True)
+    has_completed_tour = Column(Boolean, default=False)
     created_at = Column(DateTime, default=get_ph_time)
 
     profile = relationship("MedicalProfile", back_populates="user", uselist=False)
@@ -133,3 +134,19 @@ class MedicalCondition(Base):
     id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
     name = Column(String(100), unique=True, index=True)
     description = Column(Text, nullable=True)
+
+class PendingVerification(Base):
+    """Stores temporary user details and verification code before final registration."""
+    __tablename__ = "pending_verifications"
+
+    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String(255), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    first_name = Column(String(100), nullable=True)
+    last_name = Column(String(100), nullable=True)
+    middle_initial = Column(String(10), nullable=True)
+    
+    verification_code = Column(String(10), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=get_ph_time)
+

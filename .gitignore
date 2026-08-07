@@ -3,3 +3,16 @@
 /backend/component/__pycache__
 /backend/db/__pycache__
 /venv
+
+# OS metadata & macOS hidden files
+.DS_Store
+*.pyc
+
+# Local Training Datasets & Caches
+philippine_food_dataset/
+backend/philippine_food_dataset/
+backend/training_cache/
+
+# Local Dataset Scraping & Training Scripts
+backend/scrape_philippine_foods.py
+backend/train_local_model.py
