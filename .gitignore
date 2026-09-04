@@ -12,7 +12,3 @@
 philippine_food_dataset/
 backend/philippine_food_dataset/
 backend/training_cache/
-
-# Local Dataset Scraping & Training Scripts
-backend/scrape_philippine_foods.py
-backend/train_local_model.py
