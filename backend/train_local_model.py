@@ -3,24 +3,13 @@
 NutriAI - Local Food Classifier Training & ONNX Export Script (MobileNetV3-Large)
 =============================================================================
 
-This script fine-tunes a MobileNetV3-Large model on the Kaggle Food-101 dataset
-(or any image classification dataset organized in standard image folders)
-and exports the trained model to ONNX format for ultra-fast, lightweight CPU inference in FastAPI.
-
-HOW TO RUN ON KAGGLE (Free T4 GPU):
-----------------------------------
-1. Create a new Kaggle Notebook at https://www.kaggle.com
-2. Enable GPU Accelerator (P100 or T4 x2) in Notebook Settings.
-3. Add the dataset: Search for "dansbecker/food-101" or "food-101".
-4. Copy and paste this script into a Kaggle code cell and run it.
-5. Download the output files:
-   - `food_classifier.onnx`
-   - `labels.json`
-6. Place `food_classifier.onnx` and `labels.json` into `nutri-ai/backend/models/`.
+This script fine-tunes a MobileNetV3-Large model on a food image dataset
+(organized in standard image folders) and exports the trained model to ONNX format 
+for ultra-fast, lightweight CPU inference in FastAPI.
 
 HOW TO RUN LOCALLY:
 -------------------
-`python backend/train_local_model.py --dataset_dir /path/to/food-101/images --epochs 5`
+`python backend/train_local_model.py --dataset_dir philippine_food_dataset --epochs 5`
 """
 
 import os
