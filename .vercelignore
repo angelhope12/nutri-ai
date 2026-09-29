@@ -1,0 +1,17 @@
+.git
+.env
+**/.env
+**/__pycache__
+**/*.pyc
+venv
+.venv
+dataset_cleaned
+dataset_review
+philippine_food_dataset
+tests
+dist
+**/training_cache
+backend/train_local_model.py
+backend/scrape_philippine_foods.py
+backend/add_new_food.py
+requirements.original.txt

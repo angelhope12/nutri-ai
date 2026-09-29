@@ -1,61 +1,46 @@
-### Pre-requisites
-- Python 3.11
-- PostgreSQL
-- Vercel CLI
+# NutriAI
 
-run: 
-1. `powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1`
-2. Set postgres path: (open command prompt as admin)
-    - `setx PATH "%PATH%;C:\Program Files\PostgreSQL\17\bin"`
-3. Open C:\Program Files\PostgreSQL\17\data\pg_hba.conf in Notepad (Run as Administrator)
-    Find lines like:
+Food and nutrition tracking with a guided welcome, food entry, daily journal, progress and profile screens.
 
-    host    all             all             127.0.0.1/32            md5
-    host    all             all             ::1/128                 md5
+## Deployment
 
-    Change md5 → trust
-4. Initialize the local database: 
-    - `psql -U postgres -c "CREATE DATABASE nutriai_db;"` (hit Enter if asked for password, ensuring it remains empty)
-5. `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+Start with [DEPLOYMENT.md](DEPLOYMENT.md) for your existing angelhope12/nutri-ai GitHub repository and Vercel project. Deploy a preview and verify connected services before merging to master.
 
-## How to run locally (2 separate terminals)
-frontend
-- cd frontend
-- ..\venv\Scripts\python.exe -m http.server 3000
+## Local setup
 
-backend
-- cd backend
-- ..\venv\Scripts\activate; python main.py
+Use Python 3.12 and a PostgreSQL test database with password authentication. Keep database authentication enabled.
 
-## How to Train the Model on Another Device
-
-To train or retrain the MobileNetV3 food classifier model after cloning this repository on a new machine:
-
-### 1. Install Machine Learning Dependencies
-Install the required ML training stack:
-```bash
-pip install torch torchvision pillow icrawler tqdm onnxruntime
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-### 2. Download or Scrape the Dataset
-Raw image datasets are omitted from Git. Automatically scrape Philippine food images into `philippine_food_dataset/`:
-```bash
-python backend/scrape_philippine_foods.py --dataset_dir philippine_food_dataset --limit 100
+Fill in .env with your test database, a random SECRET_KEY and service credentials. Never commit .env. Start the backend from the project root:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --port 8000
 ```
 
-### 3. Train & Export ONNX Model
-Run `train_local_model.py` to fine-tune the model and export `food_classifier.onnx` and `labels.json`:
-```bash
-python backend/train_local_model.py --dataset_dir philippine_food_dataset --epochs 5 --onnx_out backend/models/food_classifier.onnx --labels_out backend/models/labels.json
+In a second terminal:
+
+```powershell
+.\.venv\Scripts\python.exe -m http.server 3000 --directory frontend
 ```
 
-#### Shortcut: Adding & Retraining a New Food Item
-To add a single new food category dynamically and retrain:
-```bash
-python backend/add_new_food.py "Pork Sisig" --images 60 --epochs 3
+Open http://localhost:3000. Backend startup creates tables and runs legacy migrations; use a dedicated test database.
+
+## Checks
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+node --test tests/entry.test.cjs
 ```
 
-### 4. (Optional) Test the Trained Model
-```bash
-python test_local_model.py --image path/to/sample_food_image.jpg
-```
+These are focused offline regression checks, not full database or production integration tests.
+
+## Model and dataset status
+
+The included ONNX weights are the original model. They have not been retrained or validated after dataset review. Nutrition results remain estimates. Read [REVIEW.md](REVIEW.md), [RELEASE_NOTES.md](RELEASE_NOTES.md) and [MODEL_STATUS.md](backend/models/MODEL_STATUS.md).
+
+The separate dataset review archive quarantines unrelated images and labels needing review. Food candidates are not approved training data. Training requires independently reviewed, separate train and validation folders. Training dependencies are intentionally excluded from the deployment requirements.

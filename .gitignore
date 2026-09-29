@@ -3,6 +3,13 @@
 /backend/component/__pycache__
 /backend/db/__pycache__
 /venv
+.venv/
+.env
+**/.env
+.vercel/
+dataset_cleaned/
+dataset_review/sheet_*.jpg
+dist/
 
 # OS metadata & macOS hidden files
 .DS_Store
