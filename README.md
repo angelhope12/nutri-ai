@@ -1,5 +1,7 @@
 # NutriAI
 
+Latest changes: [Revision 2](REVISION-2.md). Next stage: [Food recognition training](TRAINING.md).
+
 Food and nutrition tracking with a guided welcome, food entry, daily journal, progress and profile screens.
 
 ## Deployment

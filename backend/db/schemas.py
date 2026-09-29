@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 # AUTH SCHEMAS
 class Token(BaseModel):
@@ -31,6 +31,7 @@ class UserResponse(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     middle_initial: Optional[str] = None
+    avatar_url: Optional[str] = None
     has_completed_tour: bool = False
     created_at: datetime
     
@@ -93,7 +94,17 @@ class FoodLogBase(BaseModel):
     medical_caution: Optional[str] = None
 
 class FoodLogCreate(FoodLogBase):
-    pass
+    eaten_at: Optional[datetime] = None
+
+    @field_validator('eaten_at')
+    @classmethod
+    def validate_eaten_at(cls, value):
+        if value is not None:
+            if value.tzinfo is None:
+                raise ValueError('Meal time must include a timezone.')
+            if value > datetime.now(timezone.utc) + timedelta(minutes=5):
+                raise ValueError('Meal time cannot be in the future.')
+        return value
 
 class FoodLogResponse(FoodLogBase):
     id: str

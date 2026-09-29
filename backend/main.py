@@ -30,6 +30,9 @@ models.Base.metadata.create_all(bind=engine)
 # Migration helper to add new columns to users table if they don't exist
 from db.database import SessionLocal
 from sqlalchemy import text
+# Additive, idempotent migration: no existing profile values are changed.
+with engine.begin() as migration_connection:
+    migration_connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(1000)"))
 db_mig = SessionLocal()
 try:
     res = db_mig.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='first_name'"))
@@ -150,30 +153,10 @@ def send_scheduled_reminders():
             if not user:
                 continue
                 
-            # Compute smart reminders based on the user's meal times
-            logs = crud.get_food_logs_by_user(db, user_id=user.id, limit=50)
-            meal_times = {"Breakfast": [], "Lunch": [], "Dinner": []}
-            for log in logs:
-                if log.meal_type in meal_times:
-                    hour_float = log.logged_at.hour + log.logged_at.minute / 60.0
-                    meal_times[log.meal_type].append(hour_float)
-            
-            reminders = {}
-            default_map = {"Breakfast": "08:00 AM", "Lunch": "12:30 PM", "Dinner": "07:00 PM"}
-            for meal in ["Breakfast", "Lunch", "Dinner"]:
-                times = meal_times[meal]
-                if times:
-                    avg_time = sum(times) / len(times)
-                    h = int(avg_time)
-                    m = int((avg_time - h) * 60)
-                    ampm = "AM" if h < 12 else "PM"
-                    display_h = h % 12
-                    if display_h == 0:
-                        display_h = 12
-                    reminders[meal] = f"{display_h:02d}:{m:02d} {ampm}"
-                else:
-                    reminders[meal] = default_map[meal]
-                    
+            from component.reminders import learn_schedule
+            logs = crud.get_food_logs_by_user(db, user_id=user.id, limit=1000)
+            reminders = learn_schedule(logs)['times']
+
             for meal, time_str in reminders.items():
                 try:
                     parts = time_str.split()
@@ -420,6 +403,63 @@ def get_google_client_id():
 def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
 
+def cleanup_avatar(url):
+    if not url:
+        return
+    import requests
+    token = os.getenv("BLOB_READ_WRITE_TOKEN")
+    if token:
+        try:
+            response = requests.post("https://blob.vercel-storage.com/delete", json={"urls": [url]},
+                                     headers={"Authorization": f"Bearer {token}"}, timeout=15)
+            response.raise_for_status()
+        except requests.RequestException:
+            print("Profile photo storage cleanup failed; retry cleanup in the storage dashboard.")
+
+@app.post("/api/users/me/photo", response_model=schemas.UserResponse)
+def upload_profile_photo(image: UploadFile = File(...), current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    from component.profile_photo import prepare_photo, MAX_BYTES
+    import requests
+    import uuid
+    from urllib.parse import urlparse
+    token = os.getenv("BLOB_READ_WRITE_TOKEN")
+    if not token:
+        raise HTTPException(503, "Photo storage is not configured.")
+    try:
+        content = prepare_photo(image.file.read(MAX_BYTES + 1))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    try:
+        response = requests.put(f"https://blob.vercel-storage.com/avatars/{current_user.id}/{uuid.uuid4().hex}.jpg",
+                                data=content, headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"}, timeout=20)
+        response.raise_for_status()
+        url = response.json().get('url', '')
+        parsed = urlparse(url)
+        if parsed.scheme != 'https' or not (parsed.hostname or '').endswith('.public.blob.vercel-storage.com'):
+            raise ValueError('Expected a public Blob URL')
+    except (requests.RequestException, ValueError) as exc:
+        raise HTTPException(502, "Photo upload failed. Check public Blob storage configuration and try again.") from exc
+    old_url = current_user.avatar_url
+    current_user.avatar_url = url
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        cleanup_avatar(url)
+        raise HTTPException(500, "Could not save photo. Please try again.")
+    db.refresh(current_user)
+    cleanup_avatar(old_url)
+    return current_user
+
+@app.delete("/api/users/me/photo", response_model=schemas.UserResponse)
+def remove_profile_photo(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    old_url = current_user.avatar_url
+    current_user.avatar_url = None
+    db.commit()
+    db.refresh(current_user)
+    cleanup_avatar(old_url)
+    return current_user
+
 @app.post("/api/users/me/complete-tour")
 @app.post("/api/users/complete-tour")
 def complete_user_tour(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
@@ -465,7 +505,9 @@ def forgot_password_immidiate_reset(request: ForgotPasswordRequest, db: Session 
 @app.delete("/api/users/me")
 def delete_user_account(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
     # Delete DB records and retrieve orphaned Vercel Blob URLs
+    avatar_url = current_user.avatar_url
     image_urls = crud.delete_user_data(db, user_id=current_user.id)
+    cleanup_avatar(avatar_url)
     
     # Cleanup blobs
     if image_urls:
@@ -606,43 +648,10 @@ async def analyze_food(
 
 @app.get("/api/ai/reminders")
 def get_smart_reminders(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
-    """
-    Behavioral Pattern Learner: analyzes previous log times to recommend when to send reminders.
-    """
-    logs = crud.get_food_logs_by_user(db, user_id=current_user.id, limit=50)
-    
-    if not logs:
-         return {
-             "Breakfast": "08:00 AM",
-             "Lunch": "12:30 PM",
-             "Dinner": "07:00 PM"
-         }
-         
-    meal_times = {"Breakfast": [], "Lunch": [], "Dinner": []}
-    for log in logs:
-        if log.meal_type in meal_times:
-            # We want just the time component
-            hour_float = log.logged_at.hour + log.logged_at.minute / 60.0
-            meal_times[log.meal_type].append(hour_float)
-            
-    reminders = {}
-    for meal, times in meal_times.items():
-        if times:
-            avg_time = sum(times) / len(times)
-            hour = int(avg_time)
-            minute = int((avg_time - hour) * 60)
-            ampm = "AM" if hour < 12 else "PM"
-            
-            display_hour = hour % 12
-            if display_hour == 0:
-                display_hour = 12
-                
-            reminders[meal] = f"{display_hour:02d}:{minute:02d} {ampm}"
-        else:
-            default_map = {"Breakfast": "08:00 AM", "Lunch": "12:30 PM", "Dinner": "07:00 PM"}
-            reminders[meal] = default_map[meal]
-            
-    return reminders
+    from component.reminders import learn_schedule
+    logs = crud.get_food_logs_by_user(db, user_id=current_user.id, limit=1000)
+    schedule = learn_schedule(logs)
+    return {**schedule['times'], **schedule}
 
 # --- WEB PUSH ENDPOINTS ---
 @app.post("/api/push/subscribe")

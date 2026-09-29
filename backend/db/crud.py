@@ -108,7 +108,11 @@ def get_medical_profile(db: Session, user_id: str):
 
 # --- FOOD LOG CRUD ---
 def create_food_log(db: Session, user_id: str, food: schemas.FoodLogCreate):
-    db_log = models.FoodLog(**food.dict(), user_id=user_id)
+    from datetime import timezone, timedelta
+    values = food.model_dump(exclude={'eaten_at'})
+    if food.eaten_at is not None:
+        values['logged_at'] = food.eaten_at.astimezone(timezone(timedelta(hours=8))).replace(tzinfo=None)
+    db_log = models.FoodLog(**values, user_id=user_id)
     db.add(db_log)
     db.commit()
     db.refresh(db_log)

@@ -16,6 +16,7 @@ class User(Base):
     first_name = Column(String(100), nullable=True)
     last_name = Column(String(100), nullable=True)
     middle_initial = Column(String(10), nullable=True)
+    avatar_url = Column(String(1000), nullable=True)
     has_completed_tour = Column(Boolean, default=False)
     created_at = Column(DateTime, default=get_ph_time)
 

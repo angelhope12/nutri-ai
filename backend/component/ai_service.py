@@ -12,46 +12,25 @@ USDA_API_KEY = os.getenv("USDA_API_KEY")
 
 from component.common_foods import COMMON_FOODS
 
-def get_alternatives_for_allergy(allergy: str) -> str:
-    alts = {
-        "peanut": "almonds, sunflower seeds, or pumpkin seeds",
-        "peanuts": "almonds, sunflower seeds, or pumpkin seeds",
-        "shellfish": "fish, chicken, or tofu",
-        "shrimp": "fish, chicken, or tofu",
-        "crab": "fish, chicken, or tofu",
-        "milk": "almond milk, soy milk, or oat milk",
-        "dairy": "almond milk, soy milk, or oat milk",
-        "egg": "chia seeds, applesauce (for baking), or tofu",
-        "eggs": "chia seeds, applesauce (for baking), or tofu",
-        "wheat": "quinoa, rice, or gluten-free oats",
-        "soy": "lentils, chickpeas, or coconut aminos",
-        "fish": "chicken, tofu, or legumes"
-    }
-    return alts.get(allergy.lower(), "safe vegetables, lean meats, or other allergen-free options")
-
 def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
+    """Name-based prompts only: never certify ingredients or propose unchecked swaps."""
     if not medical_profile:
         return None
-        
-    illnesses = (medical_profile.get("illnesses") or "").lower()
-    allergies = (medical_profile.get("allergies") or "").lower()
-    
-    allergy_list = [a.strip() for a in allergies.split(",") if a.strip()]
-    for allergy in allergy_list:
-        if allergy in food_key or food_key in allergy:
-            alts = get_alternatives_for_allergy(allergy)
-            return f"Contains {allergy.capitalize()}, caution for allergies. Suggested alternatives: {alts}."
-            
-    if "diabetes" in illnesses:
-        high_carb_foods = ["banana", "apple", "white rice", "brown rice", "potato", "sweet potato", "oats", "pancit", "spaghetti", "macaroni"]
-        if food_key in high_carb_foods:
-            return "High carbohydrate/sugar content, caution for Diabetes. Suggested alternatives: leafy greens, cauliflower rice, lean proteins, or quinoa."
-            
-    if "lactose intolerance" in illnesses:
-        if food_key in ["milk", "cheese", "butter", "cream"]:
-            return "Contains lactose, caution for Lactose Intolerance. Suggested alternatives: almond milk, soy milk, oat milk, or lactose-free products."
-            
-    return None
+    allergies = [a.strip().lower() for a in (medical_profile.get('allergies') or '').split(',') if a.strip()]
+    illnesses = [a.strip() for a in (medical_profile.get('illnesses') or '').split(',') if a.strip()]
+    if not allergies and not illnesses:
+        return None
+    warnings = []
+    name = food_key.lower()
+    for allergy in allergies:
+        if re.search(r'\b' + re.escape(allergy.rstrip('s')) + r's?\b', name):
+            warnings.append(f'Possible {allergy} match in the food name.')
+    if allergies:
+        warnings.append('Allergy check is incomplete: confirm every ingredient and cross-contact with the label or preparer. No verified alternative is available for this recipe.')
+    if illnesses:
+        warnings.append('Your saved conditions (' + ', '.join(illnesses) + ') require individual food and portion guidance. This result has not been verified against all of them; follow your clinician or dietitian’s plan.')
+    return ' '.join(warnings)
+
 
 def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
     q = query.strip().lower()
