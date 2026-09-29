@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -60,9 +60,9 @@ class UserPasswordUpdate(BaseModel):
 
 # PROFILE SCHEMAS
 class MedicalProfileBase(BaseModel):
-    height_cm: float
-    weight_kg: float
-    target_weight_kg: float
+    height_cm: float = Field(gt=0, allow_inf_nan=False)
+    weight_kg: float = Field(gt=0, allow_inf_nan=False)
+    target_weight_kg: float = Field(gt=0, allow_inf_nan=False)
     illnesses: Optional[str] = None
     allergies: Optional[str] = None
 
@@ -82,13 +82,13 @@ class MedicalProfileResponse(MedicalProfileBase):
 class FoodLogBase(BaseModel):
     meal_type: str
     food_name: str
-    calories: int
-    protein_g: float
-    carbs_g: float
-    fat_g: float
-    vitamin_c_mg: Optional[float] = 0.0
-    calcium_mg: Optional[float] = 0.0
-    iron_mg: Optional[float] = 0.0
+    calories: int = Field(ge=0)
+    protein_g: float = Field(ge=0, allow_inf_nan=False)
+    carbs_g: float = Field(ge=0, allow_inf_nan=False)
+    fat_g: float = Field(ge=0, allow_inf_nan=False)
+    vitamin_c_mg: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    calcium_mg: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
+    iron_mg: Optional[float] = Field(default=0.0, ge=0, allow_inf_nan=False)
     image_url: Optional[str] = None
     medical_caution: Optional[str] = None
 
@@ -105,7 +105,7 @@ class FoodLogResponse(FoodLogBase):
 
 # WEIGHT HISTORY SCHEMAS
 class WeightHistoryBase(BaseModel):
-    weight_kg: float
+    weight_kg: float = Field(gt=0, allow_inf_nan=False)
 
 class WeightHistoryCreate(WeightHistoryBase):
     pass

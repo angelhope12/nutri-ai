@@ -72,14 +72,6 @@ def get_nutrition_for_class(raw_class_name: str) -> Dict[str, Any]:
             "iron_mg": profile["iron_mg"],
         }
 
-    # 3. Default generalized baseline nutrition estimation
-    return {
-        "food_name": display_name,
-        "calories": 250,
-        "protein_g": 10.0,
-        "carbs_g": 30.0,
-        "fat_g": 10.0,
-        "vitamin_c_mg": 5.0,
-        "calcium_mg": 50.0,
-        "iron_mg": 1.5,
-    }
+    # Unsupported classes must never receive fabricated nutrition.
+    from fastapi import HTTPException
+    raise HTTPException(status_code=422, detail=f"Nutrition data is unavailable for {display_name}. Please select a supported food and enter its weight.")

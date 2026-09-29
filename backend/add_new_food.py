@@ -7,8 +7,8 @@ This script allows you to add ANY new food category dynamically by passing its n
 
 Workflow:
 1. Takes user input (e.g. "Lechon Baboy" or "Bicol Express").
-2. Automatically scrapes images from Bing into `philippine_food_dataset/<category_label>/` if not already present.
-3. Automatically retrains the PyTorch model and re-exports `food_classifier.onnx` & `labels.json`.
+2. Downloads Bing candidates into `philippine_food_dataset/pending_review/<category_label>/`.
+3. Stops for visual review. Training must be run separately on reviewed train/val folders.
 
 Usage:
   python3 backend/add_new_food.py "Lechon Baboy" --images 60 --epochs 3
@@ -33,7 +33,7 @@ def scrape_food_images(food_name: str, folder_name: str, dataset_dir: str, image
     """
     Scrapes Bing images for a newly added food item if the folder doesn't exist or is empty.
     """
-    target_folder = os.path.join(dataset_dir, folder_name)
+    target_folder = os.path.join(dataset_dir, "pending_review", folder_name)
     os.makedirs(target_folder, exist_ok=True)
     
     existing_images = [f for f in os.listdir(target_folder) if not f.startswith(".")]
@@ -55,7 +55,7 @@ def scrape_food_images(food_name: str, folder_name: str, dataset_dir: str, image
             filters=None,
             max_num=images_per_class,
             min_size=(200, 200),
-            file_idx_offset=0
+            file_idx_offset='auto'
         )
         print(f"Successfully scraped images for '{food_name}' into '{target_folder}'.")
     except Exception as e:
@@ -84,6 +84,8 @@ def retrain_model(dataset_dir: str, epochs: int, onnx_out: str, labels_out: str)
 
 def add_new_food_pipeline(food_name: str, dataset_dir: str, images_per_class: int, epochs: int):
     folder_name = clean_food_key(food_name)
+    if not folder_name:
+        raise ValueError("Food name must contain letters or numbers.")
     print("=" * 60)
     print(f"NutriAI - Adding New Food: '{food_name}'")
     print(f"Category Label: '{folder_name}'")
@@ -92,18 +94,8 @@ def add_new_food_pipeline(food_name: str, dataset_dir: str, images_per_class: in
     # 1. Scrape images if not already existing
     scrape_food_images(food_name, folder_name, dataset_dir, images_per_class)
     
-    # 2. Retrain model & export updated ONNX + labels.json
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    onnx_out = os.path.join(base_dir, "models", "food_classifier.onnx")
-    labels_out = os.path.join(base_dir, "models", "labels.json")
-    
-    retrain_model(dataset_dir, epochs, onnx_out, labels_out)
-    
-    print("=" * 60)
-    print(f"Successfully added '{food_name}' to trained model!")
-    print(f"Model File: {onnx_out}")
-    print(f"Labels File: {labels_out}")
-    print("=" * 60)
+    print("Candidates saved under pending_review. No model was retrained.")
+    print("Verify food identity, remove duplicates, and prepare independent train/val folders before training.")
 
 def main():
     parser = argparse.ArgumentParser(description="Add a new food item dynamically to training dataset and retrain model")

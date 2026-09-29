@@ -12,7 +12,8 @@ and organizes them into standard PyTorch ImageFolder layout:
       ├── halo_halo/
       └── ...
 
-You can feed the output directory directly into `backend/train_local_model.py`.
+Downloads go under pending_review and cannot be used directly for training.
+Verify every image and label, then prepare separate reviewed train/val folders.
 """
 
 import os
@@ -135,7 +136,8 @@ def download_philippine_food_dataset(dataset_dir: str, images_per_class: int):
     print("=" * 60 + "\n")
 
     for idx, (folder_name, query) in enumerate(PHILIPPINE_FOOD_CATALOG.items(), 1):
-        target_folder = os.path.join(dataset_dir, folder_name)
+        # Search results are untrusted candidates, never training-ready labels.
+        target_folder = os.path.join(dataset_dir, "pending_review", folder_name)
         
         # Skip downloading if folder already exists and has enough images
         if os.path.exists(target_folder):
@@ -156,12 +158,12 @@ def download_philippine_food_dataset(dataset_dir: str, images_per_class: int):
             filters=None,
             max_num=images_per_class,
             min_size=(200, 200),
-            file_idx_offset=0
+            file_idx_offset='auto'
         )
         
         time.sleep(0.5)
 
-    print("\nDataset scraping successfully completed!")
+    print("\nDownload completed. Review every image and its dish label before training.")
     print(f"Images saved in: {os.path.abspath(dataset_dir)}")
 
 def main():

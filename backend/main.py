@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
@@ -244,7 +244,8 @@ def send_scheduled_reminders():
 # Start scheduler
 scheduler = BackgroundScheduler(timezone="Asia/Manila")
 scheduler.add_job(send_scheduled_reminders, 'cron', minute='*')
-scheduler.start()
+if not os.getenv("VERCEL") and os.getenv("ENABLE_SCHEDULER", "false").lower() == "true":
+    scheduler.start()
 
 app = FastAPI(
     title="NutriAI Backend API",
@@ -360,6 +361,8 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 def login_google(token_request: schemas.GoogleToken, db: Session = Depends(get_db)):
     try:
         client_id = os.getenv("GOOGLE_CLIENT_ID")
+        if not client_id:
+            raise HTTPException(status_code=503, detail="Google sign-in is not configured.")
         
         # Verify the token
         id_info = id_token.verify_oauth2_token(
@@ -370,6 +373,8 @@ def login_google(token_request: schemas.GoogleToken, db: Session = Depends(get_d
         )
         
         email = id_info.get("email")
+        if not id_info.get("email_verified"):
+            raise HTTPException(status_code=401, detail="Google email is not verified.")
         name = id_info.get("name", "Google User")
         
         if not email:
@@ -454,18 +459,8 @@ class ForgotPasswordRequest(schemas.BaseModel):
 
 @app.post("/api/forgot-password")
 def forgot_password_immidiate_reset(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
-    user = crud.get_user_by_email(db, email=request.email)
-    if not user:
-        raise HTTPException(status_code=404, detail="Email not found")
-        
-    if not auth.validate_password_strength(request.new_password):
-        raise HTTPException(
-            status_code=400,
-            detail="Password is too weak. It must be at least 8 characters long, contain an uppercase letter, a lowercase letter, a number, and a special character."
-        )
-        
-    crud.update_user_password(db, user_id=user.id, new_password=request.new_password)
-    return {"message": "Password reset successfully"}
+    # Disabled until a single-use, expiring email verification flow is implemented.
+    raise HTTPException(status_code=503, detail="Password recovery is temporarily unavailable. If signed in, change your password in account settings.")
 
 @app.delete("/api/users/me")
 def delete_user_account(current_user: models.User = Depends(auth.get_current_user), db: Session = Depends(get_db)):
@@ -547,7 +542,11 @@ async def analyze_food(
     image_hash = None
     
     if image:
-        image_bytes = await image.read()
+        image_bytes = await image.read(4 * 1024 * 1024 + 1)
+        if len(image_bytes) > 4 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Image must be no larger than 4 MB.")
+        if not image_bytes:
+            raise HTTPException(status_code=422, detail="Image is empty.")
         mime_type = image.content_type
         # Generate SHA-256 hash of image for cache lookup
         image_hash = hashlib.sha256(image_bytes).hexdigest()
@@ -555,30 +554,13 @@ async def analyze_food(
         # Generate a pseudo-hash from food_text for text-only caching (must fit 64-character limit)
         image_hash = hashlib.sha256(food_text.strip().lower().encode("utf-8")).hexdigest()
         
-    if image_hash:
-        # Check cache first — if this exact input was analyzed before, return cached result
-        cached = crud.get_cached_analysis(db, image_hash=image_hash, food_text=food_text)
-        if cached:
-            print(f"Cache HIT for hash {image_hash[:12]}... Skipping Gemini API call.")
-            analysis = {
-                "food_name": cached.food_name,
-                "calories": cached.calories,
-                "protein_g": cached.protein_g,
-                "carbs_g": cached.carbs_g,
-                "fat_g": cached.fat_g,
-                "vitamin_c_mg": cached.vitamin_c_mg,
-                "calcium_mg": cached.calcium_mg,
-                "iron_mg": cached.iron_mg,
-                "caution_warning": cached.caution_warning,
-                "image_url": cached.image_url,
-                "cached": True
-            }
-            return analysis
+    # Legacy shared cache mixes users' warnings and loses provenance metadata.
+    # Recompute until the cache schema supports user/profile/model versioning.
 
     if image:
         # Prepare Vercel Blob upload filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = "".join([c for c in image.filename if c.isalpha() or c.isdigit() or c in (' ', '.', '_', '-')]).rstrip()
+        safe_filename = "".join([c for c in (image.filename or "") if c.isalpha() or c.isdigit() or c in (' ', '.', '_', '-')]).rstrip()
         filename = f"{timestamp}_{safe_filename}" if safe_filename else f"{timestamp}_upload.jpg"
         
         # Pull token from environment
@@ -599,6 +581,7 @@ async def analyze_food(
         res = requests.put(
             url = f"https://blob.vercel-storage.com/{blob_path}",
             data=image_bytes, 
+            timeout=20,
             headers=headers
         )
         
@@ -615,14 +598,6 @@ async def analyze_food(
         mime_type=mime_type, 
         medical_profile=medical_data
     )
-    
-    # Cache the result if this was an image analysis
-    if image_hash and analysis.get("food_name") != "Error Processing":
-        try:
-            crud.save_cached_analysis(db, image_hash=image_hash, analysis=analysis, food_text=food_text, image_url=image_url)
-            print(f"Cache SAVED for image hash {image_hash[:12]}...")
-        except Exception as e:
-            print(f"Cache save warning (non-critical): {e}")
     
     # Inject image_url so frontend can capture it and send it to POST /logs/
     analysis["image_url"] = image_url
@@ -723,8 +698,12 @@ def test_push_notification(current_user: models.User = Depends(auth.get_current_
     return {"status": "success", "sent_count": sent_count}
 
 @app.get("/api/push/cron")
-def push_cron_trigger():
+def push_cron_trigger(authorization: Optional[str] = Header(None)):
     """Trigger scheduled reminder checks (useful for serverless environments like Vercel)."""
+    import secrets
+    cron_secret = os.getenv("CRON_SECRET")
+    if not cron_secret or not secrets.compare_digest(authorization or "", f"Bearer {cron_secret}"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     send_scheduled_reminders()
     return {"status": "success", "message": "Scheduled reminder check triggered successfully."}
 
@@ -739,7 +718,8 @@ def startup_event():
 
 @app.on_event("shutdown")
 def shutdown_event():
-    scheduler.shutdown()
+    if scheduler.running:
+        scheduler.shutdown()
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

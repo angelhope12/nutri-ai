@@ -1,5 +1,4 @@
 import os
-import google.generativeai as genai
 import json
 import re
 import requests
@@ -8,15 +7,6 @@ from fastapi import HTTPException
 
 # Load environment variables from .env file
 load_dotenv()
-
-API_KEY = os.getenv("GEMINI_API_KEY")
-if API_KEY:
-    genai.configure(api_key=API_KEY)
-
-# Use the flash model for multimodal and fast reasoning (fallback to gemini-1.5-flash)
-AI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-model = genai.GenerativeModel(AI_MODEL)
-
 
 USDA_API_KEY = os.getenv("USDA_API_KEY")
 
@@ -65,15 +55,19 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
 
 def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
     q = query.strip().lower()
+    if re.search(r'(?<![a-z])(?:ml|liters?|litres?|cups?|tbsp|tsp|oz|kg|lbs?)\b', q):
+        raise HTTPException(status_code=422, detail="Please provide the portion in grams; volume and other unit conversions are not available.")
+    if re.search(r'(?:^|\s)-\s*\d', q):
+        raise HTTPException(status_code=422, detail="Portion must be positive.")
     
-    weight_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams|ml)\b', q)
+    weight_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b', q)
     food_name = q
     weight = None
     count = None
     
     if weight_match:
         weight = float(weight_match.group(1))
-        food_name = re.sub(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams|ml)\b', '', q).strip()
+        food_name = re.sub(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b', '', q).strip()
     else:
         count_match = re.match(r'^(\d+(?:\.\d+)?)\s+(.*)', q)
         if count_match:
@@ -86,7 +80,9 @@ def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
                 count = word_numbers[words[0]]
                 food_name = " ".join(words[1:]).strip()
 
-    food_name = re.sub(r'[^a-zA-Z0-9\s]', '', food_name).strip()
+    if (weight is not None and weight <= 0) or (count is not None and count <= 0):
+        raise HTTPException(status_code=422, detail="Portion must be positive.")
+    food_name = ' '.join(re.sub(r'[^a-zA-Z0-9\s]', ' ', food_name).split())
     
     matched_key = None
     matched_food = None
@@ -107,26 +103,14 @@ def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
                 matched_food = food_info
                 break
 
-    # 3. Partial/Substring match (e.g. 'kare kare' matches 'kare-kare' or 'beef kare kare')
-    if not matched_food and len(food_name) >= 3:
-        for key, food_info in COMMON_FOODS.items():
-            clean_key = key.replace("-", " ")
-            if food_name in key or key in food_name or food_name in clean_key or clean_key in food_name:
-                matched_key = key
-                matched_food = food_info
-                break
-            synonyms = food_info.get("synonyms", [])
-            if any(food_name in s or s in food_name for s in synonyms):
-                matched_key = key
-                matched_food = food_info
-                break
-
     if matched_food:
         calculated_weight = 100.0
         if weight is not None:
             calculated_weight = weight
         elif count is not None:
-            serving_weight = matched_food.get("serving_weight", 100.0)
+            if "serving_weight" not in matched_food:
+                raise HTTPException(status_code=422, detail="This food has no known piece weight. Please enter grams.")
+            serving_weight = matched_food["serving_weight"]
             calculated_weight = count * serving_weight
         else:
             if "serving_weight" in matched_food:
@@ -144,6 +128,9 @@ def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
             "vitamin_c_mg": round(matched_food["vitamin_c_mg"] * scale, 2),
             "calcium_mg": round(matched_food["calcium_mg"] * scale, 1),
             "iron_mg": round(matched_food["iron_mg"] * scale, 2),
+            "portion_grams": calculated_weight,
+            "portion_assumed": weight is None and count is None,
+            "is_estimate": True,
             "caution_warning": caution
         }
         
@@ -151,15 +138,19 @@ def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
 
 def search_usda_database(query: str, api_key: str, medical_profile: dict = None) -> json.dumps:
     q = query.strip().lower()
+    if re.search(r'(?<![a-z])(?:ml|liters?|litres?|cups?|tbsp|tsp|oz|kg|lbs?)\b', q):
+        raise HTTPException(status_code=422, detail="Please provide the portion in grams; volume and other unit conversions are not available.")
+    if re.search(r'(?:^|\s)-\s*\d', q):
+        raise HTTPException(status_code=422, detail="Portion must be positive.")
     
-    weight_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams|ml)\b', q)
+    weight_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b', q)
     food_name = q
     weight = None
     count = None
     
     if weight_match:
         weight = float(weight_match.group(1))
-        food_name = re.sub(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams|ml)\b', '', q).strip()
+        food_name = re.sub(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b', '', q).strip()
     else:
         count_match = re.match(r'^(\d+(?:\.\d+)?)\s+(.*)', q)
         if count_match:
@@ -223,7 +214,7 @@ def search_usda_database(query: str, api_key: str, medical_profile: dict = None)
         if weight is not None:
             calculated_weight = weight
         elif count is not None:
-            calculated_weight = count * 100.0
+            raise HTTPException(status_code=422, detail="Please enter grams for USDA results; piece weights are unknown.")
             
         scale = calculated_weight / 100.0
         desc_lower = food.get("description", "").lower()
@@ -240,6 +231,8 @@ def search_usda_database(query: str, api_key: str, medical_profile: dict = None)
             "iron_mg": round(nutrients["iron_mg"] * scale, 2),
             "caution_warning": caution
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"USDA Database error: {e}")
         return None
@@ -421,7 +414,16 @@ def classify_food_image_local(image_bytes: bytes):
 
         # 1. Load image and convert to RGB
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img = img.resize((224, 224), Image.Resampling.BILINEAR)
+        # Match validation Resize(256) + CenterCrop(224), preserving aspect ratio.
+        width, height = img.size
+        if width <= height:
+            size = (256, int(256 * height / width))
+        else:
+            size = (int(256 * width / height), 256)
+        img = img.resize(size, Image.Resampling.BILINEAR)
+        left = round((img.width - 224) / 2)
+        top = round((img.height - 224) / 2)
+        img = img.crop((left, top, left + 224, top + 224))
 
         # 2. Normalize image with ImageNet mean and std
         img_np = np.array(img, dtype=np.float32) / 255.0
@@ -457,6 +459,9 @@ def analyze_food_multimodal(food_text: str, image_bytes: bytes, mime_type: str, 
     If an image is uploaded, it evaluates the trained local MobileNetV3 ONNX model FIRST.
     Gemini API calls are completely omitted.
     """
+    if image_bytes and food_text and food_text.strip():
+        return analyze_food_multimodal(food_text, None, None, medical_profile)
+
     # -------------------------------------------------------------------------
     # PATHWAY 1: Image Uploaded -> ALWAYS Check Trained Vision ML Model FIRST
     # -------------------------------------------------------------------------
@@ -526,7 +531,7 @@ def analyze_food_multimodal(food_text: str, image_bytes: bytes, mime_type: str, 
         if onnx_model_labels:
             for idx_str, raw_cls in onnx_model_labels.items():
                 clean_cls = raw_cls.replace('_', '').lower()
-                if clean_q in clean_cls or clean_cls in clean_q:
+                if clean_q and clean_q == clean_cls:
                     display_name = format_class_name(raw_cls)
                     print(f"Text Match against trained model label '{raw_cls}' -> '{display_name}'")
                     nutrition_data = get_nutrition_for_class(raw_cls)

@@ -1,5 +1,6 @@
 import os
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
@@ -13,7 +14,16 @@ DB_NAME = os.getenv("DB_NAME", "nutriai_db")
 
 # Construct PostgreSQL URL
 SSL_MODE = "" if DB_HOST in ["localhost", "127.0.0.1"] else "?sslmode=require"
-SQLALCHEMY_DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}{SSL_MODE}"
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+if SQLALCHEMY_DATABASE_URL:
+    if SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+        SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+else:
+    SQLALCHEMY_DATABASE_URL = URL.create(
+        "postgresql+psycopg2", username=DB_USER, password=DB_PASSWORD,
+        host=DB_HOST, port=int(DB_PORT), database=DB_NAME,
+        query={} if not SSL_MODE else {"sslmode": "require"},
+    )
 
 # Set echo=False to turn off database SQL query logging in terminal
 engine = create_engine(

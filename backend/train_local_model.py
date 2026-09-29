@@ -29,6 +29,9 @@ def is_valid_image_file(path: str) -> bool:
     Filters out macOS metadata files (e.g. ._filename.jpg, __MACOSX) and non-image files.
     """
     filename = os.path.basename(path)
+    blocked_folders = {"pending_review", "excluded_unrelated", "label_review", "food_candidate"}
+    if blocked_folders.intersection(os.path.normpath(path).replace('\\', '/').split('/')):
+        return False
     if filename.startswith(".") or filename.startswith("._") or "__MACOSX" in path:
         return False
     ext = os.path.splitext(filename)[1].lower()
@@ -56,11 +59,15 @@ def get_data_loaders(data_dir: str, batch_size: int = 32, num_workers: int = 4) 
 
     # If dataset has train/val subdirectories
     train_dir = os.path.join(data_dir, 'train') if os.path.exists(os.path.join(data_dir, 'train')) else data_dir
-    val_dir = os.path.join(data_dir, 'val') if os.path.exists(os.path.join(data_dir, 'val')) else train_dir
+    val_dir = os.path.join(data_dir, 'val')
+    if not os.path.isdir(val_dir) or train_dir == data_dir:
+        raise ValueError("Provide separate train/ and val/ directories containing independently labeled images. Training images cannot serve as validation data.")
 
     train_dataset = datasets.ImageFolder(root=train_dir, transform=train_transform, is_valid_file=is_valid_image_file)
     val_dataset = datasets.ImageFolder(root=val_dir, transform=val_transform, is_valid_file=is_valid_image_file)
 
+    if train_dataset.class_to_idx != val_dataset.class_to_idx:
+        raise ValueError("Training and validation class mappings must match.")
     class_names = train_dataset.classes
     print(f"Loaded dataset from '{data_dir}'. Found {len(class_names)} food categories.")
 

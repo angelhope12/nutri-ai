@@ -1,6 +1,6 @@
 import smtplib
 import os
-import random
+import secrets
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
@@ -14,7 +14,7 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 
 def generate_verification_code() -> str:
     """Generates a 6-digit random code."""
-    return str(random.randint(100000, 999999))
+    return str(100000 + secrets.randbelow(900000))
 
 def send_verification_email(receiver_email: str, code: str) -> bool:
     """
@@ -22,6 +22,9 @@ def send_verification_email(receiver_email: str, code: str) -> bool:
     Returns True if successful, False otherwise.
     """
     if not SMTP_EMAIL or not SMTP_PASSWORD:
+        if os.getenv("VERCEL") or os.getenv("APP_ENV") == "production":
+            logger.error("Email verification requires SMTP configuration in production.")
+            return False
         logger.warning("SMTP credentials not found in environment variables. Email will not be sent.")
         # We'll print it to console for development purposes if credentials aren't set
         print(f"\n[DEV MODE] Verification Code for {receiver_email}: {code}\n")
@@ -30,7 +33,7 @@ def send_verification_email(receiver_email: str, code: str) -> bool:
     try:
         message = MIMEMultipart("alternative")
         message["Subject"] = "NutriAI Verification Code"
-        message["From"] = f"NutriAI <nutriai@support.ph>"
+        message["From"] = f"NutriAI <{SMTP_EMAIL}>"
         message["To"] = receiver_email
 
         text = f"Welcome to NutriAI!\n\nYour verification code is: {code}\n\nThis code will expire in 10 minutes."
@@ -53,7 +56,7 @@ def send_verification_email(receiver_email: str, code: str) -> bool:
         message.attach(part1)
         message.attach(part2)
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
             server.login(SMTP_EMAIL, SMTP_PASSWORD)
             server.sendmail(SMTP_EMAIL, receiver_email, message.as_string())
         
@@ -62,5 +65,6 @@ def send_verification_email(receiver_email: str, code: str) -> bool:
     except Exception as e:
         logger.error(f"Failed to send verification email: {e}")
         # Even if it fails, let's print it to console so user isn't stuck during testing
-        print(f"\n[DEV MODE - SEND FAILED] Verification Code for {receiver_email}: {code}\n")
+        if not os.getenv("VERCEL") and os.getenv("APP_ENV") != "production":
+            print(f"\n[DEV MODE - SEND FAILED] Verification Code for {receiver_email}: {code}\n")
         return False
