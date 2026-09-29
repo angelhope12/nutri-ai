@@ -1,10 +1,16 @@
-const CACHE_NAME = 'nutri-ai-v1';
+const CACHE_NAME = 'nutri-ai-v3-interior';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/assets/style.css',
-  'app.js',
-  'manifest.json'
+  '/assets/nutrition.css',
+  '/assets/interior.css',
+  '/assets/food-bowl.svg',
+  '/welcome.html',
+  '/scripts/welcome.js',
+  '/scripts/entry.js',
+  '/scripts/app.js',
+  '/manifest.json'
 ];
 
 self.addEventListener('install', event => {

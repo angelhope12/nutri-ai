@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#244f3d">
+  <title>Welcome to NutriAI</title>
+  <link rel="icon" href="assets/icons/favicon.ico">
+  <link rel="stylesheet" href="assets/nutrition.css">
+  <script src="scripts/welcome.js" defer></script>
+</head>
+<body class="welcome-page">
+  <main class="welcome-shell">
+    <header class="welcome-header"><a class="wordmark" href="welcome.html" aria-label="NutriAI welcome"><span class="brand-leaf" aria-hidden="true">↗</span> NutriAI<span class="brand-dot">.</span></a><button class="quiet-button" id="skipIntro">Skip intro <span aria-hidden="true">↗</span></button></header>
+    <div class="welcome-layout">
+      <section class="welcome-art" aria-label="A colorful illustrated meal">
+        <div class="art-caption">A LITTLE MORE COLOR.<br>A LITTLE MORE BALANCE.</div>
+        <img src="assets/food-bowl.svg" width="600" height="520" alt="Illustrated bowl with leafy greens, rice, protein, tomatoes and avocado">
+        <div class="floating-note note-top"><span class="note-icon" aria-hidden="true">✦</span><span>Good food.<br><strong>Everyday possibilities.</strong></span></div>
+        <div class="floating-note note-bottom"><span class="note-icon" aria-hidden="true">✓</span><span>Small steps.<br><strong>Habits that fit your life.</strong></span></div>
+        <div class="ingredient-tags"><span>Fresh perspective</span><span>Mindful meals</span><span>Your pace</span></div>
+      </section>
+      <section class="welcome-copy">
+        <div id="introContent" aria-live="polite" aria-atomic="true">
+          <p class="eyebrow" id="introEyebrow">YOUR EVERYDAY NUTRITION COMPANION</p>
+          <h1 id="introTitle" tabindex="-1">Good food.<br><em>Better understanding.</em></h1>
+          <p class="intro-description" id="introDescription">Meet NutriAI. Get to know your meals, keep a food journal, and build a more mindful relationship with what’s on your plate.</p>
+          <div class="intro-feature" id="introFeature"><span aria-hidden="true">01</span><p>A fresh start, one meal at a time.</p></div>
+        </div>
+        <div class="intro-progress" id="introProgress" aria-label="Introduction progress"><span class="step-dot active"></span><span class="step-dot"></span><span class="step-dot"></span><span id="stepCount">01 / 03</span></div>
+        <div class="intro-controls" id="introControls"><button class="quiet-button" id="backIntro" hidden>Back</button><button class="primary-action" id="nextIntro">Next <span aria-hidden="true">→</span></button></div>
+        <div id="accountChoices" hidden><a class="primary-action" href="register.html">Create an account <span aria-hidden="true">↗</span></a><a class="secondary-action" href="login.html">I already have an account</a><button class="quiet-button replay-intro" id="replayIntro">Read the introduction again</button></div>
+        <p class="intro-footnote">Made for everyday meals. Built around you.</p>
+        <noscript><p><a href="login.html">Log in</a> or <a href="register.html">create an account</a> to start your food journal.</p></noscript>
+      </section>
+    </div>
+    <footer class="welcome-footer"><span>NOURISH YOUR CURIOSITY</span><span>Food journal · Nutrition insights · Progress</span></footer>
+  </main>
+</body>
+</html>

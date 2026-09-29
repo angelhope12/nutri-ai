@@ -18,6 +18,7 @@ if ($('#footerContainer').length > 0) {
         else if (path.includes('profile')) activeTarget = 'profile';
 
         const activeBtn = $(`.bottom-nav .nav-btn[data-nav="${activeTarget}"]`);
+        activeBtn.attr('aria-current', 'page');
         if (activeTarget === 'scanner') {
             activeBtn.removeClass('text-muted').addClass('text-white bg-success shadow-sm');
         } else {
@@ -323,7 +324,7 @@ function checkAuth() {
     const isAuthPage = window.location.pathname.includes('/login.html') || window.location.pathname.includes('/register.html') || window.location.pathname.includes('forgot-password.html');
 
     if (!token && !isAuthPage) {
-        window.location.href = '/login.html';
+        window.location.href = localStorage.getItem('nutri_intro_completed_v1') === 'true' ? 'login.html' : 'welcome.html';
     } else if (token && isAuthPage) {
         window.location.href = '/index.html';
     }
@@ -525,7 +526,7 @@ async function loadDashboard() {
                                     ${mealEmoji}
                                 </div>
                                 <div style="min-width: 0;">
-                                    <h6 class="mb-0 fw-bold text-truncate" style="max-width: 150px;">${log.food_name}</h6>
+                                    <h6 class="mb-0 fw-bold text-truncate" style="max-width: 100%;">${log.food_name}</h6>
                                     <small class="text-muted">${log.meal_type} • ${timeString}</small>
                                 </div>
                             </div>
@@ -568,6 +569,7 @@ async function loadDashboard() {
         });
 
         $('#eatenCals').text(eatenCals.toLocaleString());
+        $('#energyRing').css('--energy-progress', `${Math.min(100, Math.max(0, eatenCals / goalCals * 100))}%`);
         $('#remainingCals').text(Math.max(0, goalCals - eatenCals).toLocaleString());
         $('#dashCarbs').text(Math.round(totalCarbs));
         $('#dashProtein').text(Math.round(totalProtein));
@@ -599,20 +601,20 @@ async function loadDashboard() {
 
         if (eatenCals === 0) {
             statusBadge.text('No Meals Yet').addClass('bg-secondary-subtle text-secondary');
-            $('#recentMealsContainer').append(`<p class="text-muted text-center py-4">No food logs found.</p>`);
+            $('#recentMealsContainer').append(`<div class="journal-empty"><img src="assets/food-bowl.svg" alt="" aria-hidden="true"><h3>A fresh page for your meals</h3><p>No meals logged for this view yet. Start with your next bite.</p><a href="scanner.html">+ Add a meal</a></div>`);
             $('#carbsBar').css('flex', '0 0 0');
             $('#proteinBar').css('flex', '0 0 0');
             $('#fatBar').css('flex', '0 0 0');
         } else if (percentage < 40) {
-            statusBadge.text('Fuel Up! 🔥').addClass('bg-warning-subtle text-warning');
+            statusBadge.text('Getting started').addClass('bg-warning-subtle text-warning');
         } else if (percentage < 60) {
-            statusBadge.text('Eating Light 🥗').addClass('bg-info-subtle text-info');
+            statusBadge.text('Meals logged').addClass('bg-info-subtle text-info');
         } else if (percentage < 90) {
-            statusBadge.text('On Track ✅').addClass('bg-success-subtle text-success');
+            statusBadge.text('Meals logged').addClass('bg-success-subtle text-success');
         } else if (percentage <= 100) {
-            statusBadge.text('Almost There 🎯').addClass('bg-primary-subtle text-primary');
+            statusBadge.text('Near daily goal').addClass('bg-primary-subtle text-primary');
         } else {
-            statusBadge.text('Over Limit ⚠️').addClass('bg-danger-subtle text-danger');
+            statusBadge.text('Above daily goal').addClass('bg-danger-subtle text-danger');
         }
 
     } catch (err) {
@@ -699,7 +701,7 @@ async function requestNotificationPermission() {
                 await configurePushSubscription();
             }
         } catch (e) { console.error(e); }
-    } else if (Notification.permission === 'granted') {
+    } else if ('Notification' in window && Notification.permission === 'granted') {
         await configurePushSubscription();
     }
 }
@@ -776,7 +778,7 @@ async function loadReminders() {
             if (data.Dinner) $('#remindDinner').text(data.Dinner);
 
             // Setup notifications if permission is granted
-            if (Notification.permission === 'granted') {
+            if ('Notification' in window && Notification.permission === 'granted') {
                 configurePushSubscription();
                 setupMealNotifications(data);
             }
@@ -806,10 +808,9 @@ $(document).ready(function () {
     if (window.location.pathname.includes('/index.html') || window.location.pathname === '/') {
         loadDashboard();
 
-        // Request notifications (usually better on user interact, but we ask here)
-        requestNotificationPermission().then(() => {
-            loadReminders();
-        });
+        // Show the schedule immediately; notifications remain a deliberate opt-in.
+        loadReminders();
+        $('#enableRemindersBtn').on('click', () => requestNotificationPermission());
 
         $('#recentMealsDateFilter').on('change', function () {
             loadDashboard(); // Re-render with new filter value
@@ -1228,7 +1229,7 @@ $(document).ready(function () {
                 historyContainer.empty();
 
                 if (logs.length === 0) {
-                    historyContainer.html('<p class="text-muted text-center py-4">No food logs found.</p>');
+                    historyContainer.html('<div class="journal-empty"><img src="assets/food-bowl.svg" alt="" aria-hidden="true"><h3>A fresh page for your meals</h3><p>No meals logged for this view yet. Start with your next bite.</p><a href="scanner.html">+ Add a meal</a></div>');
                     return;
                 }
 
@@ -1731,6 +1732,12 @@ $(document).ready(function () {
             localStream.getTracks().forEach(track => track.stop());
         }
 
+        if (selectedImageFile && selectedImageFile.size > 4 * 1024 * 1024) {
+            showToast('Please choose a food photo smaller than 4 MB.', 'warning');
+            $('#scanLoading').addClass('d-none');
+            $('#aiScanForm').show();
+            return;
+        }
         const formData = new FormData();
         if (selectedImageFile) formData.append('image', selectedImageFile);
         if (textFood) formData.append('food_text', textFood);
@@ -1752,6 +1759,11 @@ $(document).ready(function () {
 
             // Populate Results included micronutrients
             $('#resFoodName').text(data.food_name);
+            if (!$('#nutritionEstimateNote').length) {
+                $('<p id="nutritionEstimateNote" class="small text-muted"></p>').insertAfter('#resFoodName');
+            }
+            const portionNote = data.portion_grams ? ` Portion: ${data.portion_grams} g${data.portion_assumed ? ' (assumed)' : ''}.` : ' Serving size is estimated.';
+            $('#nutritionEstimateNote').text('Estimated nutrition.' + portionNote + ' Confirm the food and portion before saving.');
             $('#resCals').text(data.calories);
             $('#resProtein').text(data.protein_g);
             $('#resCarbs').text(data.carbs_g);
@@ -1958,24 +1970,8 @@ function setupKnowledgeTour() {
             return;
         }
 
-        const token = getToken();
-        if (token) {
-            // Check server user state
-            fetchWithAuth(`${API_BASE_URL}/users/me`)
-                .then(res => res.ok ? res.json() : null)
-                .then(user => {
-                    if (user && user.has_completed_tour === false) {
-                        showTourModal();
-                    } else if (user && user.has_completed_tour === true) {
-                        localStorage.setItem('nutri_tour_completed', 'true');
-                    }
-                })
-                .catch(err => {
-                    console.log("Could not check tour status from server", err);
-                    if (localStorage.getItem('nutri_tour_completed') !== 'true') {
-                        showTourModal();
-                    }
-                });
-        }
+        // The public welcome flow introduces the app before authentication.
+        // Keep this feature tour available from the App Tour button only.
+
     }
 }
