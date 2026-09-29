@@ -1,3 +1,13 @@
+function renderProfilePhoto(url) {
+    const image = document.getElementById('profilePhoto');
+    if (!image) return;
+    const show = !!url && /^https:\/\//.test(url);
+    image.hidden = !show;
+    document.getElementById('profileAvatarInitials').hidden = show;
+    document.getElementById('removePhotoBtn').hidden = !show;
+    if (show) { image.src = url; image.onerror = () => { image.hidden = true; document.getElementById('profileAvatarInitials').hidden = false; }; }
+    else image.removeAttribute('src');
+}
 // Dynamically resolve backend so external devices hit the right host automatically
 // Dynamic API URL for Local vs Vercel
 let API_BASE_URL = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
@@ -121,6 +131,7 @@ function setupPasswordStrengthValidation(inputSelector) {
 async function populateMedicalConditions(containerSelector, dropdownButtonTextSelector, selectedValueStr = "") {
     try {
         const res = await fetch(`${API_BASE_URL}/medical-conditions`);
+        if (!res.ok) throw new Error('Conditions unavailable');
         const conditions = await res.json();
 
         const $container = $(containerSelector);
@@ -129,17 +140,17 @@ async function populateMedicalConditions(containerSelector, dropdownButtonTextSe
 
         const selectedVals = selectedValueStr ? selectedValueStr.split(',').map(s => s.trim()) : [];
 
-        conditions.forEach(cond => {
-            const isChecked = selectedVals.includes(cond.name) ? 'checked' : '';
-            $container.append(`
-                <div class="form-check mb-2">
-                    <input class="form-check-input condition-checkbox" type="checkbox" value="${cond.name}" id="cond_${cond.id}" ${isChecked}>
-                    <label class="form-check-label w-100" style="cursor: pointer;" for="cond_${cond.id}">
-                        <span class="fw-semibold text-dark small">${cond.name}</span>
-                        <small class="text-muted d-block" style="font-size: 0.65rem; line-height: 1.2;">${cond.description || ''}</small>
-                    </label>
-                </div>
-            `);
+        for (const value of selectedVals) {
+            if (!conditions.some(condition => condition.name === value)) conditions.push({id: `saved-${conditions.length}`, name: value, description: 'Saved condition'});
+        }
+        conditions.forEach((cond, index) => {
+            const id = `condition-option-${index}`;
+            const row = $('<div>').addClass('form-check mb-2');
+            $('<input>').addClass('form-check-input condition-checkbox').attr({type: 'checkbox', id}).val(cond.name).prop('checked', selectedVals.includes(cond.name)).appendTo(row);
+            const label = $('<label>').addClass('form-check-label w-100').attr('for', id).appendTo(row);
+            $('<span>').addClass('fw-semibold text-dark small').text(cond.name).appendTo(label);
+            $('<small>').addClass('text-muted d-block').text(cond.description || '').appendTo(label);
+            $container.append(row);
         });
 
         updateDropdownButtonText(containerSelector, dropdownButtonTextSelector);
@@ -148,6 +159,8 @@ async function populateMedicalConditions(containerSelector, dropdownButtonTextSe
             updateDropdownButtonText(containerSelector, dropdownButtonTextSelector);
         });
     } catch (err) {
+        $(containerSelector).html('<p role="alert" class="small text-danger">Could not load conditions. Reload before saving your health preferences.</p>');
+        $('#saveProfileBtn').prop('disabled', true);
         console.error("Failed to populate medical conditions", err);
     }
 }
@@ -161,7 +174,7 @@ function updateDropdownButtonText(containerSelector, dropdownButtonTextSelector)
     const $btnText = $(dropdownButtonTextSelector);
     if (selected.length > 0) {
         selected.sort();
-        $btnText.text(selected.join(', '));
+        $btnText.text(`${selected.length} selected: ${selected.join(', ')}`);
     } else {
         $btnText.text('Select Medical Conditions');
     }
@@ -722,7 +735,10 @@ async function showLocalNotification(title, body) {
     }
 }
 
+let mealNotificationTimers = [];
 function setupMealNotifications(reminders) {
+    mealNotificationTimers.forEach(clearTimeout);
+    mealNotificationTimers = [];
     if (!('Notification' in window)) return;
 
     const now = new Date();
@@ -742,8 +758,8 @@ function setupMealNotifications(reminders) {
         if (modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
         if (modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
 
-        const targetTime = new Date();
-        targetTime.setHours(hours, mins, 0, 0);
+        const phDay = new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
+        const targetTime = new Date(`${phDay}T${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:00+08:00`);
 
         const diffMs = targetTime.getTime() - now.getTime();
 
@@ -754,15 +770,15 @@ function setupMealNotifications(reminders) {
 
         // Schedule if it's still in the future
         if (ms1Hr > 0) {
-            setTimeout(() => {
+            mealNotificationTimers.push(setTimeout(() => {
                 showLocalNotification('NutriAI Meal Reminder 🍽️', `Your ${meal} is in 1 hour! Time to prepare.`);
-            }, ms1Hr);
+            }, ms1Hr));
         }
 
         if (ms30Min > 0) {
-            setTimeout(() => {
+            mealNotificationTimers.push(setTimeout(() => {
                 showLocalNotification('NutriAI Meal Reminder ⏳', `Your ${meal} is in 30 minutes!`);
-            }, ms30Min);
+            }, ms30Min));
         }
     });
 }
@@ -770,8 +786,13 @@ function setupMealNotifications(reminders) {
 async function loadReminders() {
     try {
         const res = await fetchWithAuth(`${API_BASE_URL}/ai/reminders`);
-        const data = await res.json();
-
+        if (!res.ok) throw new Error('Reminders unavailable');
+        const payload = await res.json();
+        const data = payload.times || payload;
+        if (payload.details) {
+            const learned = Object.values(payload.details).filter(x => x.source === 'learned').length;
+            $('#reminderLearningNote').text(`${learned} of 3 meal times learned. Uses up to 28 days of meal times, with at least 3 separate days per meal. Times shown in Philippine time (UTC+8).`);
+        }
         if (data) {
             if (data.Breakfast) $('#remindBreakfast').text(data.Breakfast);
             if (data.Lunch) $('#remindLunch').text(data.Lunch);
@@ -792,6 +813,25 @@ $(document).ready(function () {
     console.log("NutriAI initialized");
 
     // Initialize password strength validations
+    window.setupMeasurements?.();
+    $('#choosePhotoBtn').on('click', () => $('#profilePhotoInput').trigger('click'));
+    async function savePhoto(file, remove = false) {
+        if (file && file.size > 4 * 1024 * 1024) { $('#photoStatus').text('Choose an image smaller than 4 MB.'); return; }
+        $('#choosePhotoBtn, #removePhotoBtn').prop('disabled', true);
+        $('#photoStatus').text(remove ? 'Removing photo…' : 'Uploading photo…');
+        try {
+            const form = new FormData();
+            if (file) form.append('image', file);
+            const response = await fetchWithAuth(`${API_BASE_URL}/users/me/photo`, {method: remove ? 'DELETE' : 'POST', ...(remove ? {} : {body: form})});
+            const data = await response.json();
+            if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Could not update photo.');
+            renderProfilePhoto(data.avatar_url);
+            $('#photoStatus').text(remove ? 'Photo removed.' : 'Profile photo saved.');
+        } catch (error) { $('#photoStatus').text(error.message); }
+        finally { $('#choosePhotoBtn, #removePhotoBtn').prop('disabled', false); $('#profilePhotoInput').val(''); }
+    }
+    $('#profilePhotoInput').on('change', function () { if (this.files[0]) savePhoto(this.files[0]); });
+    $('#removePhotoBtn').on('click', () => savePhoto(null, true));
     setupPasswordStrengthValidation('#regPassword');
     setupPasswordStrengthValidation('#newPassword');
     setupPasswordStrengthValidation('#forgotNewPassword');
@@ -977,6 +1017,7 @@ $(document).ready(function () {
             illnessesList.push($(this).val());
         });
 
+        if (window.syncMeasurements && !window.syncMeasurements()) return;
         const profileData = {
             height_cm: parseFloat($('#height_cm').val()),
             weight_kg: parseFloat($('#weight_kg').val()),
@@ -1035,6 +1076,7 @@ $(document).ready(function () {
 
                     const initials = ((data.first_name ? data.first_name[0] : '') + (data.last_name ? data.last_name[0] : '')).toUpperCase() || 'U';
                     $('#profileAvatarInitials').text(initials);
+                    renderProfilePhoto(data.avatar_url);
                 }
 
                 // Populate basic info form
@@ -1055,6 +1097,7 @@ $(document).ready(function () {
                     $('#height_cm').val(data.height_cm);
                     $('#weight_kg').val(data.weight_kg).trigger('change');
                     $('#target_weight_kg').val(data.target_weight_kg);
+                    window.refreshMeasurements?.();
                     populateMedicalConditions('#illnessesOptionsContainer', '#selectedIllnessesText', data.illnesses);
                     $('#allergies').val(data.allergies);
                 }
@@ -1797,11 +1840,17 @@ $(document).ready(function () {
         e.preventDefault();
         if (!latestAnalysisResult) return;
 
+        const eatenValue = $('#eatenAt').val();
+        const eatenDate = eatenValue ? new Date(eatenValue) : null;
+        if (eatenDate && (!Number.isFinite(eatenDate.getTime()) || eatenDate.getTime() > Date.now() + 300000)) {
+            showToast('Choose a valid meal time that is not in the future.', 'danger'); return;
+        }
         const btn = $(this);
         btn.prop('disabled', true).text('Saving...');
 
         const mealType = $('#mealType').val() || "Snack";
         const logData = {
+            eaten_at: eatenDate ? eatenDate.toISOString() : null,
             meal_type: mealType,
             food_name: latestAnalysisResult.food_name,
             calories: latestAnalysisResult.calories,
@@ -1845,6 +1894,9 @@ function setupKnowledgeTour() {
     const $modal = $('#knowledgeTourModal');
     if ($modal.length === 0) return;
 
+    // Keep the dialog outside dashboard stacking contexts.
+    $modal.appendTo(document.body);
+    let previousFocus = null;
     let currentStep = 1;
     const totalSteps = 4;
 
@@ -1870,23 +1922,8 @@ function setupKnowledgeTour() {
         $('#tourIconContainer span').text(icon);
         $('#tourBannerHeading').text(heading);
 
-        // Highlight step target element if specified
-        const targetSelector = $targetStep.attr('data-target');
-        if (targetSelector) {
-            const $targetEl = $(targetSelector).first();
-            if ($targetEl.length > 0) {
-                $modal.addClass('has-spotlight');
-                $targetEl.addClass('tour-highlight-active');
-                try {
-                    $targetEl[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                } catch (e) { }
-            } else {
-                $modal.removeClass('has-spotlight');
-            }
-        } else {
-            $modal.removeClass('has-spotlight');
-        }
-
+        $('#tourStepCount').text(`Step ${currentStep} of ${totalSteps}`);
+        $modal.find('.tour-body').scrollTop(0);
         // Update dots
         $('.tour-dot').removeClass('active');
         $(`.tour-dot[data-dot="${currentStep}"]`).addClass('active');
@@ -1907,13 +1944,16 @@ function setupKnowledgeTour() {
 
     async function finishTour() {
         clearHighlights();
-        $modal.removeClass('show');
+        $modal.removeClass('show').attr('aria-hidden', 'true');
+        document.body.classList.remove('guide-open');
+        document.querySelector('.app-container')?.removeAttribute('inert');
+        previousFocus?.focus();
         localStorage.setItem('nutri_tour_completed', 'true');
 
         try {
             const token = getToken();
             if (token) {
-                await fetchWithAuth(`${API_BASE_URL}/users/complete-tour`, {
+                await fetchWithAuth(`${API_BASE_URL}/users/me/complete-tour`, {
                     method: 'POST'
                 });
             }
@@ -1923,14 +1963,27 @@ function setupKnowledgeTour() {
     }
 
     function showTourModal() {
+        previousFocus = document.activeElement === document.body ? document.getElementById('headerTourBtn') : document.activeElement;
         renderStep(1);
-        $modal.addClass('show');
+        document.querySelector('.app-container')?.setAttribute('inert', '');
+        document.body.classList.add('guide-open');
+        $modal.addClass('show').attr('aria-hidden', 'false');
+        requestAnimationFrame(() => document.getElementById('tourSkipBtn').focus());
     }
 
     window.openKnowledgeTour = function () {
         showTourModal();
     };
 
+    $modal.on('keydown', function (event) {
+        if (event.key === 'Escape') { event.preventDefault(); finishTour(); }
+        if (event.key === 'Tab') {
+            const buttons = $modal.find('button:visible').toArray();
+            const first = buttons[0], last = buttons[buttons.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+    });
     // Event Handlers
     $('#tourNextBtn').on('click', function () {
         if (currentStep < totalSteps) {

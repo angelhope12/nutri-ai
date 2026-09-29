@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nutri-ai-v3-interior';
+const CACHE_NAME = 'nutri-ai-v4-profile';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,6 +10,7 @@ const ASSETS_TO_CACHE = [
   '/scripts/welcome.js',
   '/scripts/entry.js',
   '/scripts/app.js',
+    '/scripts/measurements.js',
   '/manifest.json'
 ];
 

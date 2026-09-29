@@ -35,10 +35,12 @@
             <div id="profileMenuContainer" class="text-center my-4">
                 <div class="profile-avatar d-flex align-items-center justify-content-center bg-success text-white rounded-circle fw-bold mx-auto mb-3" 
                      style="width: 80px; height: 80px; font-size: 2rem; box-shadow: 0 4px 12px rgba(25, 135, 84, 0.25);">
-                    <span id="profileAvatarInitials">U</span>
+                    <span id="profileAvatarInitials">U</span><img id="profilePhoto" class="profile-photo" alt="Your profile photo" hidden>
                 </div>
                 <h5 class="fw-bold mb-1" id="profileFullNameDisplay">Loading Profile...</h5>
                 <p class="text-muted small mb-0" id="profileEmailDisplay">...</p>
+                <div class="avatar-controls"><button type="button" id="choosePhotoBtn" class="btn btn-success">Change photo</button><button type="button" id="removePhotoBtn" class="btn btn-outline-secondary" hidden>Remove</button><input type="file" id="profilePhotoInput" accept="image/jpeg,image/png,image/webp" hidden></div>
+                <p class="avatar-status mb-0" id="photoStatus" role="status">JPG, PNG or WebP · up to 4 MB. Photos are stored at a public image URL; avoid sensitive images.</p>
             </div>
 
             <p class="settings-label">PROFILE & PREFERENCES</p>

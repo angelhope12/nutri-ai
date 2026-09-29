@@ -53,7 +53,7 @@
                 <div class="progress mt-3" id="macroProgressBar" style="height:6px"><div class="progress-bar bg-info" id="carbsBar"></div><div class="progress-bar bg-warning" id="proteinBar"></div><div class="progress-bar bg-danger" id="fatBar"></div></div>
                 <details class="nutrient-details"><summary>Vitamins & minerals <span>+</span></summary><div class="micro-totals"><p>Vitamin C <strong><span id="dashVitC">—</span> mg</strong></p><p>Calcium <strong><span id="dashCalcium">—</span> mg</strong></p><p>Iron <strong><span id="dashIron">—</span> mg</strong></p></div></details>
               </section>
-              <aside class="day-sidebar"><section class="rhythm-card"><p class="page-kicker">MAKE TIME FOR YOU</p><h2>A rhythm for your day</h2><p class="section-description">Your meal reminder schedule.</p><div class="meal-reminder"><span aria-hidden="true">☀</span><div><strong>Breakfast</strong><small>A gentle start</small></div><time id="remindBreakfast">—</time></div><div class="meal-reminder"><span aria-hidden="true">◑</span><div><strong>Lunch</strong><small>A midday pause</small></div><time id="remindLunch">—</time></div><div class="meal-reminder"><span aria-hidden="true">☾</span><div><strong>Dinner</strong><small>Time to wind down</small></div><time id="remindDinner">—</time></div><button type="button" class="reminder-opt-in" id="enableRemindersBtn">Enable meal notifications</button></section><a class="journal-link" href="progress.html"><span><small>THE LONGER VIEW</small><strong>See how far you’ve come</strong></span><span aria-hidden="true">↗</span></a></aside>
+              <aside class="day-sidebar"><section class="rhythm-card"><p class="page-kicker">MAKE TIME FOR YOU</p><h2>A rhythm for your day</h2><p class="section-description">Your meal reminder schedule.</p><div class="meal-reminder"><span aria-hidden="true">☀</span><div><strong>Breakfast</strong><small>A gentle start</small></div><time id="remindBreakfast">—</time></div><div class="meal-reminder"><span aria-hidden="true">◑</span><div><strong>Lunch</strong><small>A midday pause</small></div><time id="remindLunch">—</time></div><div class="meal-reminder"><span aria-hidden="true">☾</span><div><strong>Dinner</strong><small>Time to wind down</small></div><time id="remindDinner">—</time></div><p id="reminderLearningNote" class="small text-muted">Learning starts after 3 separate days per meal. Times use Philippine time (UTC+8).</p><p class="small text-muted">Browser alerts need this app open. Background push requires a configured scheduler.</p><button type="button" class="reminder-opt-in" id="enableRemindersBtn">Enable meal notifications</button></section><a class="journal-link" href="progress.html"><span><small>THE LONGER VIEW</small><strong>See how far you’ve come</strong></span><span aria-hidden="true">↗</span></a></aside>
             </div>
             <section class="journal-section"><div class="section-heading"><div><p class="page-kicker">ONE MEAL AT A TIME</p><h2>Your food journal</h2></div><div><label class="visually-hidden" for="recentMealsDateFilter">Journal date</label><input type="date" id="recentMealsDateFilter" class="form-control form-control-sm"></div></div><div class="meal-list list-group" id="recentMealsContainer"><div class="journal-empty"><p>Your meals will appear here.</p><a href="scanner.html">Log a meal →</a></div></div></section>
           </div>
@@ -129,7 +129,7 @@
 
         <!-- jQuery & Bootstrap JS -->
         <!-- KNOWLEDGE TOUR MODAL (FRESH SIGNUP ONBOARDING) -->
-        <div class="tour-modal-backdrop" id="knowledgeTourModal">
+        <div class="tour-modal-backdrop" id="knowledgeTourModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="tourBannerHeading">
             <div class="tour-modal-card">
                 <div class="tour-header-banner">
                     <div class="tour-step-icon-bg" id="tourIconContainer">
@@ -152,20 +152,18 @@
                     <!-- Step 2 -->
                     <div class="tour-step" data-step="2" data-icon="📸" data-heading="Philippine Food Scanner"
                         data-target="[data-nav='scanner'], #scanFoodNavBtn">
-                        <h4 class="tour-step-title">Instant Local Food Recognition</h4>
+                        <h4 class="tour-step-title">Explore a meal</h4>
                         <p class="tour-step-desc">
-                            Tap the Scanner button in the bottom navigation bar to take or upload a photo of Filipino
-                            dishes (Adobo, Sinigang, etc.) for instant macro analysis!
+                            Open Add meal to describe a food and its weight in grams, or upload a photo. Check the predicted food and portion before saving.
                         </p>
                     </div>
 
                     <!-- Step 3 -->
                     <div class="tour-step" data-step="3" data-icon="⚠️" data-heading="Medical & Allergy Alerts"
                         data-target="#dailyStatusBadge, #remindBreakfast">
-                        <h4 class="tour-step-title">Personalized Health Warnings</h4>
+                        <h4 class="tour-step-title">Understand the limits</h4>
                         <p class="tour-step-desc">
-                            NutriAI automatically checks your scanned meals against your medical conditions (such as
-                            Diabetes or Hypertension) to issue instant health alerts.
+                            Food alerts check a limited set of known risks. A photo cannot confirm ingredients, hidden allergens, or cross-contact. Always check the recipe or label.
                         </p>
                     </div>
 
@@ -181,11 +179,11 @@
                 </div>
 
                 <div class="tour-footer">
-                    <div class="tour-dots-container" id="tourDotsContainer">
-                        <div class="tour-dot active" data-dot="1"></div>
-                        <div class="tour-dot" data-dot="2"></div>
-                        <div class="tour-dot" data-dot="3"></div>
-                        <div class="tour-dot" data-dot="4"></div>
+                    <p id="tourStepCount" class="small text-muted text-center mb-0" aria-live="polite">Step 1 of 4</p><div class="tour-dots-container" id="tourDotsContainer">
+                        <button type="button" class="tour-dot active" data-dot="1" aria-label="Guide step 1"></button>
+                        <button type="button" class="tour-dot" data-dot="2" aria-label="Guide step 2"></button>
+                        <button type="button" class="tour-dot" data-dot="3" aria-label="Guide step 3"></button>
+                        <button type="button" class="tour-dot" data-dot="4" aria-label="Guide step 4"></button>
                     </div>
 
                     <div class="tour-actions-row">

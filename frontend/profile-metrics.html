@@ -37,16 +37,16 @@
         </header>
 
         <div class="card summary-card border-0 shadow-sm p-4 text-start rounded-4 mb-4">
-            <h5 class="fw-bold mb-3 text-success">Body Metrics</h5>
+            <p class="page-kicker">YOUR STARTING POINT</p><h2 class="setup-title">Measurements & goals</h2>
             <form id="onboardingForm" class="mb-0">
                 <input type="hidden" id="isUpdate" value="true">
 
                 <div class="mb-3 row">
-                    <div class="col-6">
+                    <div class="col-12 col-md-6">
                         <label class="form-label small text-muted">Height (cm)</label>
                         <input type="number" step="0.1" class="form-control" id="height_cm" required>
                     </div>
-                    <div class="col-6">
+                    <div class="col-12 col-md-6">
                         <label class="form-label small text-muted">Current Weight (kg)</label>
                         <input type="number" step="0.1" class="form-control" id="weight_kg" required>
                     </div>
@@ -60,7 +60,7 @@
                             <span class="fs-4 fw-bold text-success" id="bmiValue">-</span>
                         </div>
                         <div class="text-end">
-                            <span class="small text-muted d-block" style="font-size: 0.75rem;">Health Status</span>
+                            <span class="small text-muted d-block" style="font-size: 0.75rem;">BMI range</span>
                             <span class="badge fs-6 px-3 py-2 rounded-pill" id="bmiCategoryBadge">-</span>
                         </div>
                     </div>
@@ -74,17 +74,16 @@
                     <input type="number" step="0.1" class="form-control" id="target_weight_kg" required>
                 </div>
 
-                <h5 class="fw-bold mb-3 text-danger">Medical Profile <span
-                        class="badge bg-danger rounded-pill fw-normal" style="font-size: 0.6rem;">Caution System</span>
+                <h5 class="fw-bold mb-3 text-success">Food & health preferences
                 </h5>
-                <p class="small text-muted mb-3">NutriAI uses this info to warn you about dangerous scanned foods.</p>
+                <p class="small text-muted mb-3">Select all conditions that apply. Food alerts are limited checks, not a medical assessment.</p>
 
                 <div class="mb-3">
                     <label class="form-label small text-muted">Pre-existing Illnesses / Conditions</label>
                     <div class="dropdown">
                         <button
                             class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center"
-                            type="button" id="illnessesDropdown" data-bs-toggle="dropdown" aria-expanded="false"
+                            type="button" id="illnessesDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false"
                             style="border: 1px solid #ced4da; background-color: #fff; color: #212529;">
                             <span id="selectedIllnessesText" class="text-truncate" style="max-width: 90%;">Select
                                 Medical Conditions</span>
@@ -92,14 +91,14 @@
 
                         <div class="dropdown-menu w-100 p-3" aria-labelledby="illnessesDropdown"
                             id="illnessesOptionsContainer" style="max-height: 250px; overflow-y: auto;">
-                            <!-- Options populated dynamically -->
+                            <p class="small text-muted">Loading conditions…</p>
                         </div>
                     </div>
                 </div>
 
                 <div class="mb-4">
                     <label class="form-label small text-muted">Allergies (comma separated)</label>
-                    <input type="text" class="form-control" id="allergies" placeholder="e.g. Peanuts, Shellfish">
+                    <input type="text" class="form-control" id="allergies" aria-label="Food allergies, separated by commas" placeholder="e.g. Peanuts, Shellfish">
                 </div>
 
                 <button type="submit" class="btn btn-success w-100 py-3 rounded-pill fw-bold" id="saveProfileBtn">Update Goals</button>
@@ -114,6 +113,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <!-- App Logic -->
+    <script src="scripts/measurements.js"></script>
     <script src="scripts/app.js"></script>
 </body>
 

@@ -22,19 +22,19 @@
         style="min-height: 100vh; display: flex; flex-direction: column; justify-content: center;">
 
         <div class="text-center mb-5">
-            <h1 class="fw-bold text-success">NutriAI ✨</h1>
-            <p class="text-muted">Tell us about yourself to personalize your experience.</p>
+            <p class="page-kicker">WELCOME TO YOUR NEXT CHAPTER</p><h1 class="interior-title">Let’s make it yours.</h1>
+            <p class="text-muted">A few details to help you get started.</p><img class="setup-illustration" src="assets/food-bowl.svg" alt="Illustrated bowl of vegetables and grains">
         </div>
 
         <div class="card summary-card border-0 shadow-sm p-4 text-start">
             <form id="onboardingForm">
-                <h5 class="fw-bold mb-3">Body Goals</h5>
+                <p class="page-kicker">01 / YOUR STARTING POINT</p><h2 class="setup-title">A plan that starts with you</h2><p class="text-muted">Use the measurements you know. We’ll handle the conversion.</p>
                 <div class="row g-3 mb-4">
-                    <div class="col-6">
+                    <div class="col-12 col-md-6">
                         <label class="form-label small text-muted">Height (cm)</label>
                         <input type="number" class="form-control" id="height_cm" required>
                     </div>
-                    <div class="col-6">
+                    <div class="col-12 col-md-6">
                         <label class="form-label small text-muted">Weight (kg)</label>
                         <input type="number" class="form-control" id="weight_kg" required>
                     </div>
@@ -48,7 +48,7 @@
                                     <span class="fs-4 fw-bold text-success" id="bmiValue">-</span>
                                 </div>
                                 <div class="text-end">
-                                    <span class="small text-muted d-block" style="font-size: 0.75rem;">Health Status</span>
+                                    <span class="small text-muted d-block" style="font-size: 0.75rem;">BMI range</span>
                                     <span class="badge fs-6 px-3 py-2 rounded-pill" id="bmiCategoryBadge">-</span>
                                 </div>
                             </div>
@@ -61,28 +61,28 @@
                     <div class="col-12">
                         <label class="form-label small text-muted">Target Weight (kg)</label>
                         <input type="number" class="form-control" id="target_weight_kg" required>
-                        <small class="text-success d-block mt-1">We'll calculate your BMI and Daily Calories.</small>
+                        <small class="text-success d-block mt-1">You can change these details later. Calorie targets are estimates; BMI alone does not measure health.</small>
                     </div>
                 </div>
 
                 <hr class="text-muted mb-4">
 
-                <h5 class="fw-bold mb-3">Medical Profile Builder</h5>
+                <h5 class="fw-bold mb-3">Food & health preferences</h5>
                 <div class="mb-3">
                     <label class="form-label small text-muted">Illnesses / Conditions (Optional)</label>
                     <div class="dropdown">
-                        <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" id="illnessesDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="border: 1px solid #ced4da; background-color: #fff; color: #212529;">
-                            <span id="selectedIllnessesText" class="text-truncate" style="max-width: 90%;">Select Medical Conditions</span>
+                        <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" id="illnessesDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" style="border: 1px solid #ced4da; background-color: #fff; color: #212529;">
+                            <span id="selectedIllnessesText" class="text-truncate" style="max-width: 90%;">Choose conditions · select multiple</span>
                         </button>
                         <div class="dropdown-menu w-100 p-3" aria-labelledby="illnessesDropdown" id="illnessesOptionsContainer" style="max-height: 250px; overflow-y: auto;">
-                            <!-- Options populated dynamically -->
+                            <p class="small text-muted">Loading conditions…</p>
                         </div>
                     </div>
                 </div>
                 <div class="mb-4">
                     <label class="form-label small text-muted">Food Allergies (Optional)</label>
-                    <input type="text" class="form-control" id="allergies" placeholder="e.g. Peanuts, Shellfish">
-                    <small class="text-muted d-block mt-1">Our AI will warn you if a scanned food is unsafe.</small>
+                    <input type="text" class="form-control" id="allergies" aria-label="Food allergies, separated by commas" placeholder="e.g. Peanuts, Shellfish">
+                    <small class="text-muted d-block mt-1">List each allergy, separated by commas. Photos cannot identify every ingredient or cross-contact risk.</small>
                 </div>
 
                 <button type="submit" class="btn btn-success w-100 py-3 rounded-pill fw-bold pt-3 pb-3 shadow-sm"
@@ -96,6 +96,7 @@
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="scripts/measurements.js"></script>
     <script src="scripts/app.js"></script>
 </body>
 
