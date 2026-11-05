@@ -234,7 +234,9 @@ def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
             if "serving_weight" in matched_food:
                 calculated_weight = matched_food["serving_weight"]
                 
-        scale = calculated_weight / 100.0
+        per_100g_items = {"chicken breast", "egg", "banana", "apple", "white rice", "brown rice", "oats", "milk", "broccoli", "salmon", "beef", "potato", "sweet potato", "avocado"}
+        base_weight = 100.0 if matched_key in per_100g_items else float(matched_food.get("serving_weight", 100.0))
+        scale = calculated_weight / base_weight
         caution = check_local_medical_cautions(matched_key, medical_profile)
         
         return {
