@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nutri-ai-v5-reminders';
+const CACHE_NAME = 'nutri-ai-v6-caution-ui';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

@@ -1,3 +1,88 @@
+function escapeCautionHtml(str) {
+    return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function renderMedicalCaution(alertSelector, textSelector, rawCaution) {
+    const $alert = $(alertSelector);
+    const $text = $(textSelector);
+    if (!rawCaution || !String(rawCaution).trim()) {
+        $alert.addClass("d-none");
+        $text.empty();
+        return;
+    }
+
+    // Normalize legacy single-line strings as well as new multi-line strings
+    let normalized = String(rawCaution).trim()
+        .replace(/\.\s+(Suggested alternatives from dataset:)/i, ".\n🥗 Safer Alternatives (Similar Macros):\n$1")
+        .replace(/Suggested alternatives from dataset:\s*/i, "")
+        .replace(/\.\s+(Allergy check:\s*)/i, ".\n🛡️ Allergy check: ")
+        .replace(/\.\s+(Saved conditions\s*\()/i, ".\n📋 $1");
+
+    const lines = normalized.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let alertsHtml = [];
+    let altsHtml = [];
+    let notesHtml = [];
+    let inAlts = false;
+
+    for (const line of lines) {
+        if (line.includes("Safer Alternatives")) {
+            inAlts = true;
+            continue;
+        }
+        if (line.startsWith("🛡️") || line.startsWith("✅") || line.startsWith("📋") || /^Allergy check:/i.test(line) || /^Saved conditions/i.test(line)) {
+            inAlts = false;
+            notesHtml.push(`<div class="caution-note-item">${escapeCautionHtml(line)}</div>`);
+            continue;
+        }
+        if (line.startsWith("•")) {
+            const itemText = line.replace(/^•\s*/, "");
+            const parts = itemText.split(/\s+—\s+/);
+            if (parts.length === 2) {
+                altsHtml.push(`<div class="caution-alt-pill"><span class="caution-alt-name">🍽️ ${escapeCautionHtml(parts[0])}</span><span class="caution-alt-macros">${escapeCautionHtml(parts[1])}</span></div>`);
+            } else {
+                altsHtml.push(`<div class="caution-alt-pill"><span class="caution-alt-name">🍽️ ${escapeCautionHtml(itemText)}</span></div>`);
+            }
+            continue;
+        }
+        if (inAlts && line.includes("kcal")) {
+            // Legacy comma-separated alternatives: "Inihaw na Bangus (240 kcal, 26g P, 3g C, 14g F), ..."
+            const legacyItems = line.replace(/\.$/, "").split(/\),\s*/);
+            for (let item of legacyItems) {
+                if (!item.endsWith(")") && item.includes("(")) item += ")";
+                const m = item.match(/^(.*?)\s*\((.*)\)$/);
+                if (m) {
+                    altsHtml.push(`<div class="caution-alt-pill"><span class="caution-alt-name">🍽️ ${escapeCautionHtml(m[1])}</span><span class="caution-alt-macros">${escapeCautionHtml(m[2].replace(/,\s*/g, " · "))}</span></div>`);
+                } else {
+                    altsHtml.push(`<div class="caution-alt-pill"><span class="caution-alt-name">🍽️ ${escapeCautionHtml(item)}</span></div>`);
+                }
+            }
+            inAlts = false;
+            continue;
+        }
+        const prefix = (line.startsWith("🚨") || line.startsWith("🩺")) ? "" : "🩺 ";
+        alertsHtml.push(`<div class="caution-reason-item">${prefix}${escapeCautionHtml(line)}</div>`);
+    }
+
+    let html = `<div class="caution-card-content">`;
+    if (alertsHtml.length) {
+        html += `<div class="caution-reasons-list">${alertsHtml.join("")}</div>`;
+    }
+    if (altsHtml.length) {
+        html += `<div class="caution-alts-box"><div class="caution-alts-title">🥗 Safer Alternatives (Similar Macros)</div><div class="caution-alts-list">${altsHtml.join("")}</div></div>`;
+    }
+    if (notesHtml.length) {
+        html += `<div class="caution-notes-list">${notesHtml.join("")}</div>`;
+    }
+    html += `</div>`;
+
+    $alert.removeClass("d-none fw-bold").addClass("medical-caution-card");
+    $text.html(html);
+}
+
 function renderProfilePhoto(url) {
     const image = document.getElementById('profilePhoto');
     if (!image) return;
@@ -567,11 +652,7 @@ async function loadDashboard() {
                         $('#modalFoodImage').attr('src', '');
                     }
 
-                    if (log.medical_caution) {
-                        $('#modalMedicalCautionAlert').removeClass('d-none').find('#modalCautionText').text(log.medical_caution);
-                    } else {
-                        $('#modalMedicalCautionAlert').addClass('d-none');
-                    }
+                    renderMedicalCaution('#modalMedicalCautionAlert', '#modalCautionText', log.medical_caution);
 
                     const modal = new bootstrap.Modal(document.getElementById('mealDetailModal'));
                     modal.show();
@@ -651,12 +732,29 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
+let cachedReminders = null;
+
+async function ensureServiceWorkerRegistered() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+        let reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+            reg = await navigator.serviceWorker.register('/sw.js');
+        }
+        return await navigator.serviceWorker.ready;
+    } catch (e) {
+        console.error("Service Worker registration failed:", e);
+        return null;
+    }
+}
+
 async function configurePushSubscription() {
     if (!('serviceWorker' in navigator)) return;
     if (!('PushManager' in window)) return;
 
     try {
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await ensureServiceWorkerRegistered();
+        if (!reg) return;
 
         // 1. Get public VAPID key from backend
         const keyRes = await fetchWithAuth(`${API_BASE_URL}/push/public-key`);
@@ -665,6 +763,7 @@ async function configurePushSubscription() {
             return;
         }
         const { public_key } = await keyRes.json();
+        if (!public_key) return;
 
         // 2. Check permission first
         if (Notification.permission !== 'granted') {
@@ -712,10 +811,34 @@ async function requestNotificationPermission() {
             const permission = await Notification.requestPermission();
             if (permission === 'granted') {
                 await configurePushSubscription();
+                if (cachedReminders) setupMealNotifications(cachedReminders);
             }
         } catch (e) { console.error(e); }
     } else if ('Notification' in window && Notification.permission === 'granted') {
         await configurePushSubscription();
+        if (cachedReminders) setupMealNotifications(cachedReminders);
+    }
+}
+
+function setupAutoNotificationOptIn() {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+        configurePushSubscription();
+        return;
+    }
+    if (Notification.permission === 'default') {
+        requestNotificationPermission();
+        const onFirstInteraction = () => {
+            document.removeEventListener('click', onFirstInteraction);
+            document.removeEventListener('touchend', onFirstInteraction);
+            document.removeEventListener('keydown', onFirstInteraction);
+            if (Notification.permission === 'default') {
+                requestNotificationPermission();
+            }
+        };
+        document.addEventListener('click', onFirstInteraction, { once: true });
+        document.addEventListener('touchend', onFirstInteraction, { once: true });
+        document.addEventListener('keydown', onFirstInteraction, { once: true });
     }
 }
 
@@ -794,6 +917,7 @@ async function loadReminders() {
             $('#reminderLearningNote').text(`${learned} of 3 meal times learned. Uses up to 28 days of meal times, with at least 3 separate days per meal. Times shown in Philippine time (UTC+8).`);
         }
         if (data) {
+            cachedReminders = data;
             if (data.Breakfast) $('#remindBreakfast').text(data.Breakfast);
             if (data.Lunch) $('#remindLunch').text(data.Lunch);
             if (data.Dinner) $('#remindDinner').text(data.Dinner);
@@ -844,6 +968,9 @@ $(document).ready(function () {
 
     // Check auth state on load
     checkAuth();
+    if (localStorage.getItem('nutriai_token')) {
+        setupAutoNotificationOptIn();
+    }
 
     if (window.location.pathname.includes('/index.html') || window.location.pathname === '/') {
         loadDashboard();
@@ -856,7 +983,6 @@ $(document).ready(function () {
 
     if (window.location.pathname.includes('profile-reminders.html') || $('#remindBreakfast').length > 0) {
         loadReminders();
-        $('#enableRemindersBtn').on('click', () => requestNotificationPermission());
     }
 
     // --- AUTH LOGIC ---
@@ -1818,12 +1944,7 @@ $(document).ready(function () {
             if ($('#resIron').length) $('#resIron').text(data.iron_mg || 0);
 
             // Handle Medical Caution
-            if (data.caution_warning) {
-                $('#medicalCautionAlert').removeClass('d-none');
-                $('#cautionText').text(data.caution_warning);
-            } else {
-                $('#medicalCautionAlert').addClass('d-none');
-            }
+            renderMedicalCaution('#medicalCautionAlert', '#cautionText', data.caution_warning);
 
         } catch (err) {
             console.error(err);

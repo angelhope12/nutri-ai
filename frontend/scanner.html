@@ -142,8 +142,9 @@
 
         <!-- AI Result Presentation -->
         <div id="scanResult" class="d-none card bg-white text-dark border-0 p-4 rounded-4 summary-card">
-            <div id="medicalCautionAlert" class="alert alert-danger d-none fw-bold" role="alert">
-                ⚠️ Medical Caution: <span id="cautionText"></span>
+            <div id="medicalCautionAlert" class="alert alert-danger d-none medical-caution-card" role="alert">
+                <div class="caution-header"><span>⚠️</span> <strong>Medical &amp; Dietary Caution</strong></div>
+                <div id="cautionText"></div>
             </div>
 
             <h4 class="fw-bold mb-3" id="resFoodName">Detected Food Name</h4>

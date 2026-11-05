@@ -104,16 +104,20 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
                 break
     food_info = food_info or {}
 
-    warnings = []
+    sections = []
     triggered_allergy = False
+    matched_allergies = []
     for allergy in allergies:
         if _matches_allergy(name, allergy):
-            warnings.append(f"Possible {allergy} match in {food_info.get('name', food_key.title())}.")
+            matched_allergies.append(allergy.title())
             triggered_allergy = True
 
+    if matched_allergies:
+        sections.append(f"🚨 Allergy Alert: Possible {', '.join(matched_allergies)} match in {food_info.get('name', food_key.title())}.")
+
     illness_reasons = _violates_illness(name, food_info, illnesses)
-    if illness_reasons:
-        warnings.append(". ".join(illness_reasons) + ".")
+    for reason in illness_reasons:
+        sections.append(f"🩺 {reason}.")
 
     # Dynamically select safer alternatives from COMMON_FOODS / labels.json when an allergy or illness caution is triggered
     if triggered_allergy or illness_reasons:
@@ -139,10 +143,8 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
                 continue
             if cand_key in unhealthy_alts:
                 continue
-            # Must not trigger any of the user's allergies
             if any(_matches_allergy(cand_key, a) for a in allergies):
                 continue
-            # Must not violate any of the user's illnesses
             if _violates_illness(cand_key, cand_info, illnesses):
                 continue
 
@@ -152,7 +154,6 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
             cand_carbs = float(cand_info.get('carbs_g', 15))
             cand_fat = float(cand_info.get('fat_g', 10))
 
-            # Rank by closest macronutrient distance to the original flagged food
             macro_distance = (
                 abs(cand_prot - target_prot) * 2.5
                 + abs(cand_carbs - target_carbs) * 1.8
@@ -160,7 +161,7 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
                 + abs(cand_cals - target_cals) * 0.15
             )
             score = (in_labels, round(macro_distance, 2))
-            cname = f"{cand_info.get('name', cand_key.title())} ({int(cand_cals)} kcal, {cand_prot:g}g P, {cand_carbs:g}g C, {cand_fat:g}g F)"
+            cname = f"{cand_info.get('name', cand_key.title())} — {int(cand_cals)} kcal · {cand_prot:g}g P · {cand_carbs:g}g C · {cand_fat:g}g F"
             candidates.append((score, cname))
 
         candidates.sort(key=lambda x: x[0])
@@ -171,14 +172,15 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
             if len(top_alts) == 3:
                 break
         if top_alts:
-            warnings.append("Suggested alternatives from dataset: " + ", ".join(top_alts) + ".")
+            alt_lines = "\n".join(f"• {alt}" for alt in top_alts)
+            sections.append(f"🥗 Safer Alternatives (Similar Macros):\n{alt_lines}")
 
     if allergies and not triggered_allergy:
-        warnings.append('Allergy check: confirm hidden ingredients and cross-contact with the preparer.')
+        sections.append("🛡️ Allergy check: " + ", ".join(a.title() for a in allergies) + ".")
     if illnesses and not illness_reasons:
-        warnings.append('Saved conditions (' + ', '.join(illnesses) + '): follow your clinician’s portion guidance.')
+        sections.append("📋 Saved conditions (" + ", ".join(illnesses) + "): follow your clinician’s portion guidance.")
 
-    return ' '.join(warnings) if warnings else None
+    return "\n".join(sections) if sections else None
 
 
 def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
