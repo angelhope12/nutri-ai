@@ -13,23 +13,162 @@ USDA_API_KEY = os.getenv("USDA_API_KEY")
 from component.common_foods import COMMON_FOODS
 
 def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
-    """Name-based prompts only: never certify ingredients or propose unchecked swaps."""
+    """Dynamically checks allergies and medical conditions against COMMON_FOODS and suggests safe dataset alternatives."""
     if not medical_profile:
         return None
-    allergies = [a.strip().lower() for a in (medical_profile.get('allergies') or '').split(',') if a.strip()]
-    illnesses = [a.strip() for a in (medical_profile.get('illnesses') or '').split(',') if a.strip()]
+    ignored_values = {'none', 'n/a', 'na', 'no', 'no allergies', 'no allergy', 'nothing', 'nil', 'null', '-', 'wala'}
+    allergies = [a.strip().lower() for a in (medical_profile.get('allergies') or '').split(',') if a.strip() and a.strip().lower() not in ignored_values]
+    illnesses = [a.strip() for a in (medical_profile.get('illnesses') or '').split(',') if a.strip() and a.strip().lower() not in ignored_values]
     if not allergies and not illnesses:
         return None
+
+    allergen_keywords = {
+        'peanut': ['peanut', 'kare kare', 'kare-kare', 'lumpiang sariwa'],
+        'peanuts': ['peanut', 'kare kare', 'kare-kare', 'lumpiang sariwa'],
+        'nut': ['peanut', 'nut', 'kare kare', 'kare-kare'],
+        'nuts': ['peanut', 'nut', 'kare kare', 'kare-kare'],
+        'shrimp': ['shrimp', 'hipon', 'palabok', 'malabon', 'bicol express', 'pinakbet', 'kare kare'],
+        'hipon': ['shrimp', 'hipon', 'palabok', 'malabon', 'bicol express', 'pinakbet'],
+        'shellfish': ['shrimp', 'hipon', 'crab', 'alimango', 'pusit', 'squid', 'tahong', 'palabok', 'malabon', 'bicol express', 'pinakbet'],
+        'seafood': ['shrimp', 'hipon', 'crab', 'pusit', 'squid', 'fish', 'isda', 'bangus', 'tilapia', 'tanigue', 'tuyo', 'daing', 'palabok', 'malabon'],
+        'crab': ['crab', 'alimango', 'palabok', 'malabon'],
+        'squid': ['squid', 'pusit', 'calamares'],
+        'pusit': ['squid', 'pusit', 'calamares'],
+        'fish': ['fish', 'isda', 'bangus', 'tilapia', 'tanigue', 'tuyo', 'daing', 'bangsilog', 'tinapa', 'salmon', 'tuna'],
+        'isda': ['fish', 'isda', 'bangus', 'tilapia', 'tanigue', 'tuyo', 'daing', 'bangsilog'],
+        'egg': ['egg', 'itlog', 'balut', 'kwek', 'tortang', 'leche flan', 'silog', 'tapsilog', 'longsilog', 'tocilog', 'bangsilog', 'lomi', 'arroz caldo'],
+        'eggs': ['egg', 'itlog', 'balut', 'kwek', 'tortang', 'leche flan', 'silog', 'tapsilog', 'longsilog', 'tocilog', 'bangsilog', 'lomi', 'arroz caldo'],
+        'milk': ['milk', 'dairy', 'cheese', 'butter', 'cream', 'leche flan', 'halo halo', 'mango float', 'buko pandan', 'sopas', 'ensaymada', 'cassava cake'],
+        'dairy': ['milk', 'dairy', 'cheese', 'butter', 'cream', 'leche flan', 'halo halo', 'mango float', 'buko pandan', 'sopas', 'ensaymada', 'cassava cake'],
+        'pork': ['pork', 'baboy', 'lechon', 'sisig', 'pata', 'menudo', 'dinuguan', 'tocino', 'longganisa', 'longsilog', 'tocilog', 'chicharon', 'bicol express', 'lumpia shanghai', 'lomi', 'batchoy'],
+        'baboy': ['pork', 'baboy', 'lechon', 'sisig', 'pata', 'menudo', 'dinuguan', 'tocino', 'longganisa', 'longsilog', 'tocilog', 'chicharon'],
+        'chicken': ['chicken', 'manok', 'inasal', 'tinola', 'sopas', 'afritada', 'arroz caldo'],
+        'manok': ['chicken', 'manok', 'inasal', 'tinola', 'sopas', 'afritada', 'arroz caldo'],
+        'beef': ['beef', 'baka', 'caldereta', 'kaldereta', 'bistek', 'pares', 'bulalo', 'tapsilog', 'tapa'],
+        'baka': ['beef', 'baka', 'caldereta', 'kaldereta', 'bistek', 'pares', 'bulalo', 'tapsilog', 'tapa'],
+        'soy': ['soy', 'tofu', 'tokwa', 'taho', 'adobo', 'bistek', 'pares'],
+        'wheat': ['wheat', 'bread', 'pandesal', 'ensaymada', 'pan de coco', 'hopia', 'pancit', 'lomi', 'batchoy', 'spaghetti', 'lumpia', 'turon', 'oats'],
+        'gluten': ['wheat', 'bread', 'pandesal', 'ensaymada', 'pan de coco', 'hopia', 'pancit', 'lomi', 'batchoy', 'spaghetti', 'lumpia', 'turon', 'oats'],
+    }
+
+    def _matches_allergy(target_name: str, allergy_term: str) -> bool:
+        t = target_name.lower().replace('_', ' ')
+        base = allergy_term.lower().strip()
+        if re.search(r'\b' + re.escape(base.rstrip('s')) + r's?\b', t):
+            return True
+        for kw in allergen_keywords.get(base, []):
+            if kw in t:
+                return True
+        return False
+
+    def _violates_illness(target_name: str, info: dict, illness_list: list) -> list:
+        t = target_name.lower().replace('_', ' ')
+        cals = float(info.get('calories', 200))
+        carbs = float(info.get('carbs_g', 15))
+        fat = float(info.get('fat_g', 10))
+        prot = float(info.get('protein_g', 12))
+        reasons = []
+        for ill in illness_list:
+            il = ill.lower()
+            if 'diabetes' in il:
+                sweet_or_starchy = any(w in t for w in ['halo', 'leche', 'ube', 'biko', 'cassava', 'float', 'buko pandan', 'turon', 'banana cue', 'spaghetti', 'tocino', 'taho', 'sapin', 'puto', 'bibingka', 'bread', 'ensaymada', 'pan de coco', 'hopia', 'pandesal', 'rice', 'silog', 'pancit'])
+                if carbs >= 25.0 or sweet_or_starchy:
+                    reasons.append(f"High carbohydrate/sugar content ({carbs:.0f}g carbs), caution for {ill}")
+            if any(k in il for k in ['hypertension', 'heart', 'cholesterol', 'blood pressure']):
+                fatty_or_salty = any(w in t for w in ['lechon', 'crispy pata', 'sisig', 'chicharon', 'bulalo', 'dinuguan', 'bicol express', 'tuyo', 'daing', 'tocino', 'longganisa', 'longsilog', 'tocilog', 'tapsilog', 'isaw', 'kwek', 'pares', 'caldereta'])
+                if fat >= 16.0 or fatty_or_salty:
+                    reasons.append(f"High fat/sodium content ({fat:.0f}g fat), caution for {ill}")
+            if 'obesity' in il:
+                if cals >= 260 or fat >= 16.0:
+                    reasons.append(f"High calorie/fat density ({cals:.0f} kcal), caution for {ill}")
+            if 'kidney' in il:
+                if prot >= 23.0 or any(w in t for w in ['tuyo', 'daing', 'tocino', 'longganisa', 'sisig']):
+                    reasons.append(f"High protein/sodium load, caution for {ill}")
+            if 'celiac' in il or 'gluten' in il:
+                if _matches_allergy(t, 'gluten'):
+                    reasons.append(f"Contains wheat/gluten, caution for {ill}")
+            if 'lactose' in il:
+                if _matches_allergy(t, 'dairy'):
+                    reasons.append(f"Contains dairy/lactose, caution for {ill}")
+            if 'gout' in il or 'uric' in il:
+                if any(w in t for w in ['chicharon', 'isaw', 'dinuguan', 'sisig', 'bulalo', 'pata', 'beef', 'baka', 'hipon', 'pusit', 'balut']):
+                    reasons.append(f"High purine content, caution for {ill}")
+        return reasons
+
+    name = food_key.lower().replace('_', ' ').strip()
+    food_info = COMMON_FOODS.get(name)
+    if not food_info:
+        for k, v in COMMON_FOODS.items():
+            if name == k or name in v.get('synonyms', []):
+                food_info = v
+                break
+    food_info = food_info or {}
+
     warnings = []
-    name = food_key.lower()
+    triggered_allergy = False
     for allergy in allergies:
-        if re.search(r'\b' + re.escape(allergy.rstrip('s')) + r's?\b', name):
-            warnings.append(f'Possible {allergy} match in the food name.')
-    if allergies:
-        warnings.append('Allergy check is incomplete: confirm every ingredient and cross-contact with the label or preparer. No verified alternative is available for this recipe.')
-    if illnesses:
-        warnings.append('Your saved conditions (' + ', '.join(illnesses) + ') require individual food and portion guidance. This result has not been verified against all of them; follow your clinician or dietitian’s plan.')
-    return ' '.join(warnings)
+        if _matches_allergy(name, allergy):
+            warnings.append(f"Possible {allergy} match in {food_info.get('name', food_key.title())}.")
+            triggered_allergy = True
+
+    illness_reasons = _violates_illness(name, food_info, illnesses)
+    if illness_reasons:
+        warnings.append(". ".join(illness_reasons) + ".")
+
+    # Dynamically select safer alternatives from COMMON_FOODS / labels.json when an allergy or illness caution is triggered
+    if triggered_allergy or illness_reasons:
+        label_keys = set()
+        try:
+            labels_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models", "labels.json")
+            if os.path.exists(labels_path):
+                with open(labels_path, "r", encoding="utf-8") as lf:
+                    ldata = json.load(lf)
+                label_keys = {str(v).lower().replace('_', ' ').strip() for v in ldata.values()}
+        except Exception:
+            pass
+
+        is_soup = any(w in name for w in ['sinigang', 'tinola', 'nilaga', 'bulalo', 'sopas', 'arroz caldo', 'lomi', 'batchoy'])
+        unhealthy_alts = {'balut', 'tuyo', 'tuyo dried fish', 'chicharon bulaklak', 'isaw bbq', 'kwek kwek', 'crispy pata', 'lechon baboy', 'lechon kawali', 'pork sisig', 'dinuguan'}
+
+        candidates = []
+        for cand_key, cand_info in COMMON_FOODS.items():
+            if cand_key == name or name in cand_info.get('synonyms', []):
+                continue
+            if cand_key in unhealthy_alts:
+                continue
+            # Must not trigger any of the user's allergies
+            if any(_matches_allergy(cand_key, a) for a in allergies):
+                continue
+            # Must not violate any of the user's illnesses
+            if _violates_illness(cand_key, cand_info, illnesses):
+                continue
+            in_labels = 0 if (not label_keys or cand_key in label_keys or any(s in label_keys for s in cand_info.get('synonyms', []))) else 1
+            cand_is_soup = any(w in cand_key for w in ['sinigang', 'tinola', 'nilaga'])
+            same_style = 0 if (is_soup and cand_is_soup) else (0 if (not is_soup and any(w in cand_key for w in ['tinola', 'inihaw', 'sinigang', 'chopsuey', 'pinakbet', 'lumpiang sariwa', 'tortang talong', 'chicken inasal', 'nilaga'])) else 1)
+            score = (
+                in_labels,
+                same_style,
+                float(cand_info.get('fat_g', 10)) + float(cand_info.get('carbs_g', 15)) * 0.4,
+                float(cand_info.get('calories', 200)),
+            )
+            candidates.append((score, cand_info.get('name', cand_key.title())))
+
+        candidates.sort(key=lambda x: x[0])
+        top_alts = []
+        for _, cname in candidates:
+            if cname not in top_alts:
+                top_alts.append(cname)
+            if len(top_alts) == 3:
+                break
+        if top_alts:
+            warnings.append("Suggested alternatives from dataset: " + ", ".join(top_alts) + ".")
+
+    if allergies and not triggered_allergy:
+        warnings.append('Allergy check: confirm hidden ingredients and cross-contact with the preparer.')
+    if illnesses and not illness_reasons:
+        warnings.append('Saved conditions (' + ', '.join(illnesses) + '): follow your clinician’s portion guidance.')
+
+    return ' '.join(warnings) if warnings else None
 
 
 def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
@@ -347,6 +486,8 @@ def init_local_vision_model(force_reload: bool = False):
         onnx_vision_session = ort.InferenceSession(onnx_path, providers=["CPUExecutionProvider"])
         with open(labels_path, "r", encoding="utf-8") as f:
             onnx_model_labels = json.load(f)
+        from component.sync_common_foods import sync_labels_to_common_foods
+        sync_labels_to_common_foods(onnx_model_labels)
         print(f"Successfully loaded local MobileNetV3-Large ONNX vision model from '{onnx_path}' ({len(onnx_model_labels)} classes).")
     except Exception as e:
         print(f"Notice: Local ONNX vision model could not be loaded ({e}).")

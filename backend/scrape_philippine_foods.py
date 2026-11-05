@@ -138,6 +138,7 @@ def download_philippine_food_dataset(dataset_dir: str, images_per_class: int):
     for idx, (folder_name, query) in enumerate(PHILIPPINE_FOOD_CATALOG.items(), 1):
         # Search results are untrusted candidates, never training-ready labels.
         target_folder = os.path.join(dataset_dir, "pending_review", folder_name)
+        os.makedirs(target_folder, exist_ok=True)
         
         # Skip downloading if folder already exists and has enough images
         if os.path.exists(target_folder):

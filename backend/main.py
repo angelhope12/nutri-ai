@@ -720,10 +720,11 @@ def push_cron_trigger(authorization: Optional[str] = Header(None)):
 def startup_event():
     # Eagerly initialize OCR engine on server startup to avoid lag on first request
     try:
-        from component.ai_service import init_ocr_engine
+        from component.ai_service import init_ocr_engine, init_local_vision_model
         init_ocr_engine()
+        init_local_vision_model()
     except Exception as e:
-        print(f"Startup warning: Failed to initialize OCR engine on startup: {e}")
+        print(f"Startup warning: Failed to initialize AI models on startup: {e}")
 
 @app.on_event("shutdown")
 def shutdown_event():

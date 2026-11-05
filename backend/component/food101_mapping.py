@@ -58,7 +58,21 @@ def get_nutrition_for_class(raw_class_name: str) -> Dict[str, Any]:
                 "iron_mg": float(info["iron_mg"]),
             }
 
-    # 2. Check predefined static profile fallback
+    # 2. Substring / partial match in COMMON_FOODS
+    for key, info in COMMON_FOODS.items():
+        if key in query_key or query_key in key or any(s in query_key or query_key in s for s in info.get("synonyms", [])):
+            return {
+                "food_name": info["name"],
+                "calories": int(round(info["calories"])),
+                "protein_g": float(info["protein_g"]),
+                "carbs_g": float(info["carbs_g"]),
+                "fat_g": float(info["fat_g"]),
+                "vitamin_c_mg": float(info["vitamin_c_mg"]),
+                "calcium_mg": float(info["calcium_mg"]),
+                "iron_mg": float(info["iron_mg"]),
+            }
+
+    # 3. Check predefined static profile fallback
     if raw_class_name.lower() in FOOD101_ESTIMATED_PROFILES:
         profile = FOOD101_ESTIMATED_PROFILES[raw_class_name.lower()]
         return {
@@ -75,3 +89,8 @@ def get_nutrition_for_class(raw_class_name: str) -> Dict[str, Any]:
     # Unsupported classes must never receive fabricated nutrition.
     from fastapi import HTTPException
     raise HTTPException(status_code=422, detail=f"Nutrition data is unavailable for {display_name}. Please select a supported food and enter its weight.")
+
+try:
+    from component.sync_common_foods import sync_labels_to_common_foods
+except ImportError:
+    from backend.component.sync_common_foods import sync_labels_to_common_foods

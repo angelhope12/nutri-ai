@@ -23,6 +23,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms, models
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def is_valid_image_file(path: str) -> bool:
     """
@@ -57,10 +59,23 @@ def get_data_loaders(data_dir: str, batch_size: int = 32, num_workers: int = 4) 
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # If dataset has train/val subdirectories
-    train_dir = os.path.join(data_dir, 'train') if os.path.exists(os.path.join(data_dir, 'train')) else data_dir
+    # If dataset has pending_review/, ensure all categories are split into train/ and val/
+    pending_dir = os.path.join(data_dir, 'pending_review')
+    train_dir = os.path.join(data_dir, 'train')
     val_dir = os.path.join(data_dir, 'val')
-    if not os.path.isdir(val_dir) or train_dir == data_dir:
+    if os.path.isdir(pending_dir):
+        pending_classes = {d for d in os.listdir(pending_dir) if os.path.isdir(os.path.join(pending_dir, d)) and not d.startswith(".")}
+        train_classes = {d for d in os.listdir(train_dir) if os.path.isdir(os.path.join(train_dir, d)) and not d.startswith(".")} if os.path.isdir(train_dir) else set()
+        val_classes = {d for d in os.listdir(val_dir) if os.path.isdir(os.path.join(val_dir, d)) and not d.startswith(".")} if os.path.isdir(val_dir) else set()
+        missing_classes = pending_classes - (train_classes & val_classes)
+        if missing_classes:
+            print(f"Found {len(missing_classes)} unsplit category folder(s) in 'pending_review/': {sorted(missing_classes)}. Splitting into train/ and val/ (80/20)...")
+            try:
+                from split_dataset import split_dataset
+            except ImportError:
+                from backend.split_dataset import split_dataset
+            split_dataset(data_dir, split_ratio=0.8, only_missing=True)
+    if not os.path.isdir(train_dir) or not os.path.isdir(val_dir):
         raise ValueError("Provide separate train/ and val/ directories containing independently labeled images. Training images cannot serve as validation data.")
 
     train_dataset = datasets.ImageFolder(root=train_dir, transform=train_transform, is_valid_file=is_valid_image_file)
@@ -71,8 +86,8 @@ def get_data_loaders(data_dir: str, batch_size: int = 32, num_workers: int = 4) 
     class_names = train_dataset.classes
     print(f"Loaded dataset from '{data_dir}'. Found {len(class_names)} food categories.")
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=torch.cuda.is_available())
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=torch.cuda.is_available())
 
     return train_loader, val_loader, class_names
 
@@ -191,6 +206,13 @@ def export_to_onnx(model: nn.Module, class_names: list, output_onnx_path: str, o
 
     print(f"Class labels saved to: {output_json_path}")
 
+    # Automatically sync any new labels into backend/component/common_foods.py
+    try:
+        from component.sync_common_foods import sync_labels_to_common_foods
+    except ImportError:
+        from backend.component.sync_common_foods import sync_labels_to_common_foods
+    sync_labels_to_common_foods(class_names)
+
 
 def find_kaggle_food_dataset() -> str:
     """
@@ -229,7 +251,7 @@ def main(dataset_dir: str = None, epochs: int = None):
             print(f"Auto-detected Kaggle food dataset at: '{detected_path}'")
             target_dataset_dir = detected_path
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else ("mps" if torch.backends.mps.is_available() else "cpu"))
 
     if not os.path.exists(target_dataset_dir):
         print(f"Error: Dataset directory '{target_dataset_dir}' not found.")
