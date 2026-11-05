@@ -127,7 +127,10 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
         except Exception:
             pass
 
-        is_soup = any(w in name for w in ['sinigang', 'tinola', 'nilaga', 'bulalo', 'sopas', 'arroz caldo', 'lomi', 'batchoy'])
+        target_cals = float(food_info.get('calories', 220))
+        target_prot = float(food_info.get('protein_g', 18))
+        target_carbs = float(food_info.get('carbs_g', 12))
+        target_fat = float(food_info.get('fat_g', 12))
         unhealthy_alts = {'balut', 'tuyo', 'tuyo dried fish', 'chicharon bulaklak', 'isaw bbq', 'kwek kwek', 'crispy pata', 'lechon baboy', 'lechon kawali', 'pork sisig', 'dinuguan'}
 
         candidates = []
@@ -142,16 +145,23 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
             # Must not violate any of the user's illnesses
             if _violates_illness(cand_key, cand_info, illnesses):
                 continue
+
             in_labels = 0 if (not label_keys or cand_key in label_keys or any(s in label_keys for s in cand_info.get('synonyms', []))) else 1
-            cand_is_soup = any(w in cand_key for w in ['sinigang', 'tinola', 'nilaga'])
-            same_style = 0 if (is_soup and cand_is_soup) else (0 if (not is_soup and any(w in cand_key for w in ['tinola', 'inihaw', 'sinigang', 'chopsuey', 'pinakbet', 'lumpiang sariwa', 'tortang talong', 'chicken inasal', 'nilaga'])) else 1)
-            score = (
-                in_labels,
-                same_style,
-                float(cand_info.get('fat_g', 10)) + float(cand_info.get('carbs_g', 15)) * 0.4,
-                float(cand_info.get('calories', 200)),
+            cand_cals = float(cand_info.get('calories', 200))
+            cand_prot = float(cand_info.get('protein_g', 15))
+            cand_carbs = float(cand_info.get('carbs_g', 15))
+            cand_fat = float(cand_info.get('fat_g', 10))
+
+            # Rank by closest macronutrient distance to the original flagged food
+            macro_distance = (
+                abs(cand_prot - target_prot) * 2.5
+                + abs(cand_carbs - target_carbs) * 1.8
+                + abs(cand_fat - target_fat) * 1.8
+                + abs(cand_cals - target_cals) * 0.15
             )
-            candidates.append((score, cand_info.get('name', cand_key.title())))
+            score = (in_labels, round(macro_distance, 2))
+            cname = f"{cand_info.get('name', cand_key.title())} ({int(cand_cals)} kcal, {cand_prot:g}g P, {cand_carbs:g}g C, {cand_fat:g}g F)"
+            candidates.append((score, cname))
 
         candidates.sort(key=lambda x: x[0])
         top_alts = []

@@ -847,14 +847,16 @@ $(document).ready(function () {
 
     if (window.location.pathname.includes('/index.html') || window.location.pathname === '/') {
         loadDashboard();
-
-        // Show the schedule immediately; notifications remain a deliberate opt-in.
         loadReminders();
-        $('#enableRemindersBtn').on('click', () => requestNotificationPermission());
 
         $('#recentMealsDateFilter').on('change', function () {
             loadDashboard(); // Re-render with new filter value
         });
+    }
+
+    if (window.location.pathname.includes('profile-reminders.html') || $('#remindBreakfast').length > 0) {
+        loadReminders();
+        $('#enableRemindersBtn').on('click', () => requestNotificationPermission());
     }
 
     // --- AUTH LOGIC ---
