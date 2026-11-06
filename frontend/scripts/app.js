@@ -2031,7 +2031,13 @@ $(document).ready(function () {
     $('#aiScanForm').submit(async function (e) {
         e.preventDefault();
 
-        const textFood = $('#foodText').val();
+        const textFood = $('#foodText').val().trim();
+        const foodGrams = $('#foodGrams').val() ? $('#foodGrams').val().trim() : '';
+
+        if (foodGrams && (isNaN(parseFloat(foodGrams)) || parseFloat(foodGrams) <= 0)) {
+            showToast("Portion weight in grams must be a positive number.", 'warning');
+            return;
+        }
 
         if (!selectedImageFile && !textFood) {
             showToast("Please take a picture or describe your food first.", 'warning');
@@ -2055,6 +2061,7 @@ $(document).ready(function () {
         const formData = new FormData();
         if (selectedImageFile) formData.append('image', selectedImageFile);
         if (textFood) formData.append('food_text', textFood);
+        if (foodGrams) formData.append('portion_grams', foodGrams);
 
         try {
             const res = await fetchWithAuth(`${API_BASE_URL}/ai/analyze-food`, {

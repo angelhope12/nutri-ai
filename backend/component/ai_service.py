@@ -12,7 +12,7 @@ USDA_API_KEY = os.getenv("USDA_API_KEY")
 
 from component.common_foods import COMMON_FOODS
 
-def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
+def check_local_medical_cautions(food_key: str, medical_profile: dict, scale: float = 1.0) -> str:
     """Dynamically checks allergies and medical conditions against COMMON_FOODS and suggests safe dataset alternatives."""
     if not medical_profile:
         return None
@@ -102,7 +102,11 @@ def check_local_medical_cautions(food_key: str, medical_profile: dict) -> str:
             if name == k or name in v.get('synonyms', []):
                 food_info = v
                 break
-    food_info = food_info or {}
+    food_info = dict(food_info) if food_info else {}
+    if food_info and scale != 1.0:
+        for k in ('calories', 'protein_g', 'carbs_g', 'fat_g'):
+            if k in food_info:
+                food_info[k] = round(float(food_info[k]) * scale, 1)
 
     sections = []
     triggered_allergy = False
@@ -249,7 +253,7 @@ def find_local_food(query: str, medical_profile: dict = None) -> json.dumps:
         per_100g_items = {"chicken breast", "egg", "banana", "apple", "white rice", "brown rice", "oats", "milk", "broccoli", "salmon", "beef", "potato", "sweet potato", "avocado"}
         base_weight = 100.0 if matched_key in per_100g_items else float(matched_food.get("serving_weight", 100.0))
         scale = calculated_weight / base_weight
-        caution = check_local_medical_cautions(matched_key, medical_profile)
+        caution = check_local_medical_cautions(matched_key, medical_profile, scale=scale)
         
         return {
             "food_name": f"{matched_food['name']} ({int(calculated_weight)}g)" if weight is not None or count is not None else matched_food['name'],
@@ -587,14 +591,24 @@ def classify_food_image_local(image_bytes: bytes):
         print(f"Error during local ML vision classification: {e}")
         return None
 
-def analyze_food_multimodal(food_text: str, image_bytes: bytes, mime_type: str, medical_profile: dict = None):
+def analyze_food_multimodal(food_text: str, image_bytes: bytes, mime_type: str, medical_profile: dict = None, portion_grams: float = None):
     """
     Analyzes food input (image and/or text) using the local trained vision model and local databases.
     If an image is uploaded, it evaluates the trained local MobileNetV3 ONNX model FIRST.
     Gemini API calls are completely omitted.
     """
+    if portion_grams is not None and portion_grams <= 0:
+        raise HTTPException(status_code=422, detail="Portion must be positive.")
+
     if image_bytes and food_text and food_text.strip():
-        return analyze_food_multimodal(food_text, None, None, medical_profile)
+        # If food_text is only a gram weight (e.g. "250g" or "250"), treat it as portion_grams for the image
+        only_weight = re.match(r'^\s*(\d+(?:\.\d+)?)\s*(?:g|gram|grams)?\s*$', food_text.strip(), re.I)
+        if only_weight:
+            if portion_grams is None:
+                portion_grams = float(only_weight.group(1))
+            food_text = None
+        else:
+            return analyze_food_multimodal(food_text, None, None, medical_profile, portion_grams=portion_grams)
 
     # -------------------------------------------------------------------------
     # PATHWAY 1: Image Uploaded -> ALWAYS Check Trained Vision ML Model FIRST
@@ -614,8 +628,9 @@ def analyze_food_multimodal(food_text: str, image_bytes: bytes, mime_type: str, 
             if confidence >= threshold:
                 print(f"SUCCESS: Local Vision Model HIT! '{display_name}' ({confidence*100:.1f}% confidence >= {threshold*100:.0f}% threshold).")
                 
-                # Check local food DB first with human-readable food name
-                local_food_res = find_local_food(display_name, medical_profile)
+                lookup_query = f"{portion_grams:g}g {display_name}" if portion_grams else display_name
+                # Check local food DB first with human-readable food name (and optional grams)
+                local_food_res = find_local_food(lookup_query, medical_profile)
                 if local_food_res:
                     local_food_res["source"] = "local_ml_model"
                     local_food_res["confidence"] = round(confidence, 2)
@@ -649,6 +664,8 @@ def analyze_food_multimodal(food_text: str, image_bytes: bytes, mime_type: str, 
     # PATHWAY 2: Text Search Only (No Image Uploaded)
     # -------------------------------------------------------------------------
     search_query = food_text.strip() if food_text else ""
+    if search_query and portion_grams and not re.search(r'(\d+(?:\.\d+)?)\s*(?:g|gram|grams)\b', search_query, re.I):
+        search_query = f"{portion_grams:g}g {search_query}"
     if search_query:
         print(f"Searching local common foods database for text query: '{search_query}'")
         

@@ -108,6 +108,15 @@
                     <small id="voiceStatus" class="text-white-50 d-none mt-1">🔴 Listening...</small>
                 </div>
 
+                <div class="mb-3" id="gramsInputContainer">
+                    <label for="foodGrams" class="form-label small text-light opacity-75">Portion weight in grams <span class="text-white-50">(optional)</span></label>
+                    <div class="input-group">
+                        <input type="number" step="any" min="1" max="5000" class="form-control bg-dark text-white border-secondary" id="foodGrams"
+                            placeholder="Leave blank for standard serving (e.g. 250)">
+                        <span class="input-group-text bg-dark text-white-50 border-secondary">g</span>
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label for="mealType" class="form-label small text-light opacity-75">Add to</label>
                     <select class="form-select bg-dark text-white border-secondary" id="mealType">

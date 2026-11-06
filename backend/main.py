@@ -565,6 +565,7 @@ def get_logs(limit: int = 100, date: Optional[str] = None, current_user: models.
 @app.post("/api/ai/analyze-food")
 async def analyze_food(
     food_text: Optional[str] = Form(None),
+    portion_grams: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
@@ -634,11 +635,21 @@ async def analyze_food(
         # URL path that will be stored securely in db
         image_url = res.json().get("url")
         
+    parsed_grams = None
+    if portion_grams is not None and str(portion_grams).strip() != "":
+        try:
+            parsed_grams = float(str(portion_grams).strip())
+            if parsed_grams <= 0:
+                raise ValueError()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Portion weight in grams must be a positive number.")
+
     analysis = ai_service.analyze_food_multimodal(
         food_text=food_text, 
         image_bytes=image_bytes, 
         mime_type=mime_type, 
-        medical_profile=medical_data
+        medical_profile=medical_data,
+        portion_grams=parsed_grams
     )
     
     # Inject image_url so frontend can capture it and send it to POST /logs/
