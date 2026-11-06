@@ -763,10 +763,14 @@ async function configurePushSubscription() {
             return;
         }
         const { public_key } = await keyRes.json();
-        if (!public_key) return;
+        if (!public_key) {
+            console.warn("VAPID_PUBLIC_KEY is not configured on the backend.");
+            return;
+        }
 
         // 2. Check permission first
         if (Notification.permission !== 'granted') {
+            console.warn("Notification.permission is not granted:", Notification.permission);
             return;
         }
 
@@ -775,7 +779,16 @@ async function configurePushSubscription() {
             applicationServerKey: urlBase64ToUint8Array(public_key)
         };
 
-        const subscription = await reg.pushManager.subscribe(subscribeOptions);
+        let subscription;
+        try {
+            subscription = await reg.pushManager.subscribe(subscribeOptions);
+        } catch (subErr) {
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) {
+                await existing.unsubscribe();
+            }
+            subscription = await reg.pushManager.subscribe(subscribeOptions);
+        }
 
         // Extract subscription keys
         const subJSON = subscription.toJSON();
@@ -1421,7 +1434,8 @@ $(document).ready(function () {
                             fat: 0,
                             vitC: 0,
                             calcium: 0,
-                            iron: 0
+                            iron: 0,
+                            items: []
                         };
                     }
                     groupedLogs[sortKey].eatenCals += log.calories;
@@ -1431,16 +1445,64 @@ $(document).ready(function () {
                     groupedLogs[sortKey].vitC += (log.vitamin_c_mg || 0);
                     groupedLogs[sortKey].calcium += (log.calcium_mg || 0);
                     groupedLogs[sortKey].iron += (log.iron_mg || 0);
+                    groupedLogs[sortKey].items.push(log);
                 });
 
                 // Sort descending
-                const sortedKeys = Object.keys(groupedLogs).sort().reverse();
+                const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+                const [todayYear, todayMonth] = todayKey.split('-').map(Number);
+                const sortedKeys = Object.keys(groupedLogs).filter(k => k <= todayKey).sort().reverse();
+                let selectedDateKey = todayKey;
+                let [viewYear, viewMonth] = [todayYear, todayMonth]; // viewMonth is 1..12
 
-                sortedKeys.forEach(key => {
-                    const data = groupedLogs[key];
+                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+                historyContainer.html(`
+                    <div class="journal-calendar-card">
+                        <div class="journal-cal-header">
+                            <h6 class="journal-cal-title" id="journalCalTitle"></h6>
+                            <div class="journal-cal-nav">
+                                <button type="button" class="journal-cal-btn" id="journalPrevMonthBtn" aria-label="Previous month">◀</button>
+                                <button type="button" class="journal-cal-btn" id="journalNextMonthBtn" aria-label="Next month">▶</button>
+                            </div>
+                        </div>
+                        <div class="journal-cal-legend">
+                            <span><i class="cal-dot on-track"></i>On goal</span>
+                            <span><i class="cal-dot under-goal"></i>Under goal</span>
+                            <span><i class="cal-dot over-limit"></i>Above goal</span>
+                        </div>
+                        <div class="journal-cal-weekdays">
+                            <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+                        </div>
+                        <div class="journal-cal-grid" id="journalCalGrid"></div>
+                    </div>
+                    <div class="journal-inspector-label">Selected Day Breakdown</div>
+                    <div id="journalDayInspector"></div>
+                `);
+
+                function formatFallbackDate(dateKey) {
+                    const [y, m, d] = dateKey.split('-').map(Number);
+                    const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+                    return dt.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+                }
+
+                function renderSelectedDayCard(dateKey) {
+                    const inspector = $('#journalDayInspector');
+                    const data = groupedLogs[dateKey];
+                    if (!data) {
+                        const friendlyDate = formatFallbackDate(dateKey);
+                        inspector.html(`
+                            <div class="card history-card border-0 shadow-sm mb-3">
+                                <div class="card-body text-center py-4">
+                                    <h6 class="fw-bold text-dark mb-1">${friendlyDate}</h6>
+                                    <p class="text-muted small mb-0">No meals logged for this date.</p>
+                                </div>
+                            </div>
+                        `);
+                        return;
+                    }
+
                     const remaining = Math.max(0, goalCals - data.eatenCals);
-
-                    // Micronutrient formatting and logic
                     const vitCFmt = (Math.round(data.vitC * 10) / 10).toFixed(1);
                     const calcFmt = (Math.round(data.calcium * 10) / 10).toFixed(1);
                     const ironFmt = (Math.round(data.iron * 10) / 10).toFixed(1);
@@ -1460,7 +1522,14 @@ $(document).ready(function () {
                         statusClass = "text-warning bg-warning-subtle";
                     }
 
-                    const card = `
+                    const mealsHtml = (data.items || []).map(item => `
+                        <div class="journal-day-meal-row">
+                            <span><strong>${escapeCautionHtml(item.food_name)}</strong> <small class="text-muted">(${escapeCautionHtml(item.meal_type || 'Meal')})</small></span>
+                            <span class="fw-semibold">${Math.round(item.calories)} kcal</span>
+                        </div>
+                    `).join('');
+
+                    inspector.html(`
                         <div class="card history-card border-0 shadow-sm mb-3">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -1527,11 +1596,83 @@ $(document).ready(function () {
                                         </div>
                                     </div>
                                 </div>
+                                ${mealsHtml ? `<div class="journal-day-meals">${mealsHtml}</div>` : ''}
                             </div>
                         </div>
-                    `;
-                    historyContainer.append(card);
+                    `);
+                }
+
+                function renderCalendar() {
+                    $('#journalCalTitle').text(`${monthNames[viewMonth - 1]} ${viewYear}`);
+                    const isCurrentOrFutureMonth = (viewYear > todayYear) || (viewYear === todayYear && viewMonth >= todayMonth);
+                    $('#journalNextMonthBtn').prop('disabled', isCurrentOrFutureMonth);
+
+                    const grid = $('#journalCalGrid');
+                    grid.empty();
+
+                    const firstWeekday = new Date(viewYear, viewMonth - 1, 1).getDay();
+                    const daysInMonth = new Date(viewYear, viewMonth, 0).getDate();
+
+                    for (let i = 0; i < firstWeekday; i++) {
+                        grid.append('<div class="journal-cal-day empty" aria-hidden="true"></div>');
+                    }
+
+                    const monthPrefix = `${viewYear}-${String(viewMonth).padStart(2, '0')}-`;
+                    for (let day = 1; day <= daysInMonth; day++) {
+                        const dateKey = `${monthPrefix}${String(day).padStart(2, '0')}`;
+                        const isFuture = dateKey > todayKey;
+                        const dayData = groupedLogs[dateKey];
+                        let statusCls = '';
+                        if (!isFuture && dayData) {
+                            const pct = (dayData.eatenCals / goalCals) * 100;
+                            if (pct > 100) statusCls = 'status-over';
+                            else if (pct < 40) statusCls = 'status-under';
+                            else statusCls = 'status-on-track';
+                        }
+                        const selCls = (!isFuture && dateKey === selectedDateKey) ? 'selected' : '';
+                        const todayCls = (dateKey === todayKey) ? 'is-today' : '';
+                        const futureCls = isFuture ? 'future' : '';
+                        const disabledAttr = isFuture ? 'disabled aria-disabled="true"' : '';
+                        const $btn = $(`<button type="button" class="journal-cal-day ${statusCls} ${selCls} ${todayCls} ${futureCls}" data-date="${dateKey}" ${disabledAttr}>${day}</button>`);
+                        if (!isFuture) {
+                            $btn.on('click', function () {
+                                selectedDateKey = dateKey;
+                                grid.find('.journal-cal-day').removeClass('selected');
+                                $(this).addClass('selected');
+                                renderSelectedDayCard(selectedDateKey);
+                            });
+                        }
+                        grid.append($btn);
+                    }
+                }
+
+                $('#journalPrevMonthBtn').on('click', function () {
+                    viewMonth -= 1;
+                    if (viewMonth < 1) { viewMonth = 12; viewYear -= 1; }
+                    const monthPrefix = `${viewYear}-${String(viewMonth).padStart(2, '0')}-`;
+                    const monthLogs = sortedKeys.filter(k => k.startsWith(monthPrefix));
+                    selectedDateKey = monthLogs[0] || `${monthPrefix}01`;
+                    renderCalendar();
+                    renderSelectedDayCard(selectedDateKey);
                 });
+
+                $('#journalNextMonthBtn').on('click', function () {
+                    if (viewYear > todayYear || (viewYear === todayYear && viewMonth >= todayMonth)) return;
+                    viewMonth += 1;
+                    if (viewMonth > 12) { viewMonth = 1; viewYear += 1; }
+                    const monthPrefix = `${viewYear}-${String(viewMonth).padStart(2, '0')}-`;
+                    if (viewYear === todayYear && viewMonth === todayMonth) {
+                        selectedDateKey = todayKey;
+                    } else {
+                        const monthLogs = sortedKeys.filter(k => k.startsWith(monthPrefix));
+                        selectedDateKey = monthLogs[0] || `${monthPrefix}01`;
+                    }
+                    renderCalendar();
+                    renderSelectedDayCard(selectedDateKey);
+                });
+
+                renderCalendar();
+                renderSelectedDayCard(selectedDateKey);
 
             } catch (err) {
                 console.error("Failed to load food log history", err);
