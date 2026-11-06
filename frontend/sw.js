@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nutri-ai-v6-caution-ui';
+const CACHE_NAME = 'nutri-ai-v7-calendar-journal';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -10,7 +10,7 @@ const ASSETS_TO_CACHE = [
   '/scripts/welcome.js',
   '/scripts/entry.js',
   '/scripts/app.js',
-    '/scripts/measurements.js',
+  '/scripts/measurements.js',
   '/manifest.json'
 ];
 
@@ -39,10 +39,21 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/')) return;
+
+  // Network-first strategy so deployed UI/JS/CSS updates appear immediately on mobile PWA
   event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
+    fetch(event.request)
+      .then(networkResponse => {
+        if (networkResponse && networkResponse.status === 200 && url.origin === self.location.origin) {
+          const cloned = networkResponse.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, cloned));
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
 

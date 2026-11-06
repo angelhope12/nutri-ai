@@ -740,6 +740,8 @@ async function ensureServiceWorkerRegistered() {
         let reg = await navigator.serviceWorker.getRegistration();
         if (!reg) {
             reg = await navigator.serviceWorker.register('/sw.js');
+        } else {
+            reg.update().catch(() => {});
         }
         return await navigator.serviceWorker.ready;
     } catch (e) {
